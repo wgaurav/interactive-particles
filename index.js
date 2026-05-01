@@ -23,6 +23,17 @@ renderer.outputColorSpace = THREE.LinearSRGBColorSpace; // OutputPass handles fi
 const root = document.getElementById('root') ?? document.body;
 root.appendChild(renderer.domElement);
 
+// ── 2D Circle Rings Overlay ──
+const overlayCanvas = document.createElement('canvas');
+overlayCanvas.style.cssText = 'position:fixed;top:0;left:0;pointer-events:none;z-index:10;';
+document.body.appendChild(overlayCanvas);
+const overlayCtx = overlayCanvas.getContext('2d');
+function resizeOverlay() {
+  overlayCanvas.width = window.innerWidth;
+  overlayCanvas.height = window.innerHeight;
+}
+resizeOverlay();
+
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
 const bloomPass = new UnrealBloomPass(
@@ -475,7 +486,7 @@ const vertexShader = `
     vec3 tang2 = normalize(cross(aNormal, tang1));
 
     if (aFlow > 0.5) {
-      float flowSpeed = 0.06 + aSeed * 0.03;
+      float flowSpeed = 0.022 + aSeed * 0.010;
       float flowCycle = mod(t * flowSpeed + aSeed * 10.0, 1.0);
       float topY = 0.234;
       float botY = -0.234;
@@ -485,11 +496,11 @@ const vertexShader = `
       float hD = mix(0.416, 0.286, yN);
       float insetW = hW - 0.005;
       float insetD = hD - 0.005;
-      float wobble = snoise(vec3(aSeed * 20.0, t * 0.1, flowCycle * 3.0)) * 0.015;
+      float wobble = snoise(vec3(aSeed * 20.0, t * 0.04, flowCycle * 3.0)) * 0.015;
       p.x = clamp(p.x + wobble, -insetW, insetW);
       p.z = clamp(p.z + wobble * 0.7, -insetD, insetD);
     } else {
-      float flowT = t * 0.15;
+      float flowT = t * 0.05;
       float n1 = snoise(vec3(aOriginal.x * 0.8 + aSeed * 5.0, aOriginal.z * 0.8, flowT));
       float n2 = snoise(vec3(aOriginal.z * 0.8 + aSeed * 3.0 + 50.0, aOriginal.y * 0.8, flowT + 10.0));
       p += tang1 * n1 * 0.06 + tang2 * n2 * 0.06;
@@ -502,7 +513,7 @@ const vertexShader = `
     }
 
     p += aNormal * 0.002;
-    float wave = snoise(vec3(p.x * 1.5, p.z * 1.5, t * 0.08)) * 0.004;
+    float wave = snoise(vec3(p.x * 1.5, p.z * 1.5, t * 0.03)) * 0.004;
     p += aNormal * wave;
     p += aDisplacement;
 
@@ -519,7 +530,7 @@ const vertexShader = `
     vec3 driftDir = normalize(aNormal * 0.25 + vec3(dnx, dny, dnz) * 0.75);
 
     // Quadratic: near-zero while bar fills screen, accelerates as you keep scrolling
-    float driftAmp = spreadT * spreadT * (4.0 + aSeed * 4.5);
+    float driftAmp = spreadT * spreadT * (7.0 + aSeed * 8.0);
     p = p + driftDir * driftAmp;
 
     // Gentle sway scales continuously — imperceptible early, living at full spread
@@ -528,14 +539,15 @@ const vertexShader = `
     p.y += cos(t * 0.10 + aSeed * 6.28318 + 1.5708) * swayAmp * 0.7;
     p.z += sin(t * 0.09 + aSeed * 6.28318 + 3.1416) * swayAmp * 0.8;
 
-    // Density: purely linear from 20% scroll so every wheel tick reduces count equally
-    float fadeT = max(0.0, (uScrollT - 0.20) / 0.80);
-    float survivorThreshold = 0.06;
+    // Fade starts earlier and compresses into a shorter scroll window so
+    // the mid-scroll cloud is noticeably thinner and the circle stage is sparse
+    float fadeT = max(0.0, (uScrollT - 0.08) / 0.52);
+    float survivorThreshold = 0.03;
     float netAlpha = 1.0;
     if (aSeed >= survivorThreshold) {
       float relSeed = (aSeed - survivorThreshold) / (1.0 - survivorThreshold);
       float fadeAt  = 1.0 - relSeed;
-      netAlpha = 1.0 - smoothstep(fadeAt - 0.10, fadeAt + 0.04, fadeT);
+      netAlpha = 1.0 - smoothstep(fadeAt - 0.08, fadeAt + 0.04, fadeT);
     }
     vNetAlpha = netAlpha;
 
@@ -708,9 +720,9 @@ const fragmentShader = `
     float darkShimmer = snoise(vec3(wp.x * 5.0 + t * 0.03, wp.z * 5.0 + t * 0.02, wp.y * 4.0 + t * 0.025));
     float darkShine = smoothstep(0.2, 0.7, darkShimmer) * 0.06;
 
-    float brightPulse = 0.5 + 0.5 * sin(t * 1.2 + vSeed * 40.0);
+    float brightPulse = 0.5 + 0.5 * sin(t * 0.4 + vSeed * 40.0);
     float brightBoost = vBright * mix(0.28, 0.58, brightPulse) + (1.0 - vBright) * 0.12;
-    float glintPhase = sin(t * 3.5 + vSeed * 100.0) * sin(t * 2.1 + vSeed * 67.0);
+    float glintPhase = sin(t * 1.1 + vSeed * 100.0) * sin(t * 0.7 + vSeed * 67.0);
     float glint = vBright * smoothstep(0.78, 1.0, glintPhase) * 0.80;
 
     // Mouse proximity flare — particles near cursor flash bright gold/white
@@ -756,9 +768,9 @@ const fragmentShader = `
     float darkEdge = exp(-waveCombined * waveCombined * 0.5) * 0.10;
 
     // Slow rolling reflection bands — simulate overhead light sweeping across the bar
-    float roll1 = exp(-pow(wp.x - sin(t * 0.17) * 1.3, 2.0) * 2.2) * 0.72;
-    float roll2 = exp(-pow(wp.z - cos(t * 0.11) * 0.38, 2.0) * 4.5) * 0.45;
-    float roll3 = exp(-pow(wp.x + cos(t * 0.23 + 1.4) * 0.9, 2.0) * 3.2) * 0.40;
+    float roll1 = exp(-pow(wp.x - sin(t * 0.06) * 1.3, 2.0) * 2.2) * 0.72;
+    float roll2 = exp(-pow(wp.z - cos(t * 0.04) * 0.38, 2.0) * 4.5) * 0.45;
+    float roll3 = exp(-pow(wp.x + cos(t * 0.08 + 1.4) * 0.9, 2.0) * 3.2) * 0.40;
     float rolling = clamp(roll1 + roll2 + roll3, 0.0, 0.90);
 
     // ── Dynamic mouse/auto-orbit light ──────────────────────────────────────
@@ -768,9 +780,9 @@ const fragmentShader = `
     // When cursor is idle: a gentle light slowly orbits on its own so the bar
     // is never fully static — the "internal moving shadow/glow" effect.
     vec3 autoOrbitDir = normalize(vec3(
-      sin(t * 0.18) * 1.6,
-      0.6 + sin(t * 0.11 + 1.0) * 0.5,
-      1.8 + cos(t * 0.14) * 0.9
+      sin(t * 0.07) * 1.6,
+      0.6 + sin(t * 0.04 + 1.0) * 0.5,
+      1.8 + cos(t * 0.05) * 0.9
     ));
     vec3 mouseLightDir = normalize(vec3(uMouseScreen.x * 2.0, uMouseScreen.y * 1.6, 2.0));
     vec3 dynDir = normalize(mix(autoOrbitDir, mouseLightDir, uMouseActive));
@@ -850,9 +862,9 @@ const fragmentShader = `
     // to near-white, simulating light leaking through particle gaps.
     // Auto-orbits slowly when idle; shifts with mouse position when active.
     vec3 autoIntPos = vec3(
-      sin(t * 0.21) * 1.05,
-      -0.02 + sin(t * 0.14 + 1.1) * 0.14,
-      cos(t * 0.17) * 0.24
+      sin(t * 0.08) * 1.05,
+      -0.02 + sin(t * 0.05 + 1.1) * 0.14,
+      cos(t * 0.06) * 0.24
     );
     vec3 mouseIntPos = vec3(uMouseScreen.x * 1.15, uMouseScreen.y * 0.15, 0.15);
     vec3 intLightPos = mix(autoIntPos, mouseIntPos, uMouseActive);
@@ -1334,11 +1346,11 @@ window.addEventListener('scroll', () => {
 const camKF = isMobile ? [
   { t: 0.00, p: [0, 1.2, 5.0], l: [0, 0.0, 0] },
   { t: 0.30, p: [0, 0.5, 4.2], l: [0, 0.0, 0] },
-  { t: 1.00, p: [0, 1.2, 7.0], l: [0, 0.0, 0] },
+  { t: 1.00, p: [0, 1.5, 9.5], l: [0, 0.0, 0] },
 ] : [
   { t: 0.00, p: [0, 1.8, 4.5], l: [0, 0.15, 0] },
   { t: 0.30, p: [0, 0.8, 2.5], l: [0, 0.00, 0] },
-  { t: 1.00, p: [0, 1.5, 6.5], l: [0, 0.00, 0] },
+  { t: 1.00, p: [0, 1.8, 11.0], l: [0, 0.00, 0] },
 ];
 const _initKF = camKF[0];
 const _targetCamPos  = new THREE.Vector3(..._initKF.p);
@@ -1359,6 +1371,96 @@ function getCamState(st) {
   }
   const last = camKF[camKF.length - 1];
   return { p: [...last.p], l: [...last.l] };
+}
+
+// ── Circle Rings ──
+function drawRings(t, sst) {
+  const W = window.innerWidth, H = window.innerHeight;
+  const cx = W / 2, cy = H / 2;
+  const ref = Math.min(W * 0.9, H * 0.8);
+
+  overlayCtx.clearRect(0, 0, W, H);
+
+  // Growth: ring radius expands linearly; circle size stays tiny (cubic) until final stage
+  const GROW_START = 0.20, GROW_END = 0.78;
+  const FADE_START = 0.84, FADE_END = 1.00;
+
+  let sizeP, alpha;
+  if (sst < GROW_START) {
+    sizeP = 0; alpha = 0;
+  } else if (sst < GROW_END) {
+    const r = (sst - GROW_START) / (GROW_END - GROW_START);
+    sizeP = r * r * (3 - 2 * r);
+    // alpha fades in quickly so rings are visible as tiny glowing dots from early on
+    alpha = Math.min(sizeP * 6, 1);
+  } else if (sst < FADE_START) {
+    sizeP = 1; alpha = 1;
+  } else {
+    sizeP = 1;
+    alpha = Math.max(0, 1 - (sst - FADE_START) / (FADE_END - FADE_START));
+  }
+
+  if (alpha < 0.005) return;
+
+  const rings = [
+    { radius: ref * 0.38, circleR: ref * 0.052, dir:  1, speed: 0.09 },
+    { radius: ref * 0.62, circleR: ref * 0.052, dir: -1, speed: 0.06 },
+  ];
+
+  for (const ring of rings) {
+    const ringR = ring.radius * sizeP;
+    // Cubic curve: circles stay very small (≤12% of final) for most of the scroll,
+    // then rapidly bloom to full size only as sizeP approaches 1 (the final stage)
+    const circR = ring.circleR * Math.pow(sizeP, 3);
+    const rot   = t * ring.speed * ring.dir;
+
+    for (let i = 0; i < 8; i++) {
+      const angle = (i / 8) * Math.PI * 2 + rot;
+      const x = cx + Math.cos(angle) * ringR;
+      const y = cy + Math.sin(angle) * ringR;
+
+      if (circR < 0.8) continue;
+
+      overlayCtx.save();
+
+      // ── Fill: dark warm-gray base (4A4743 @ 18%) + radial center glow (white @ 5%) ──
+      overlayCtx.beginPath();
+      overlayCtx.arc(x, y, circR, 0, Math.PI * 2);
+      overlayCtx.fillStyle = `rgba(74,71,67,${alpha * 0.18})`;
+      overlayCtx.fill();
+
+      const radFill = overlayCtx.createRadialGradient(x, y, 0, x, y, circR);
+      radFill.addColorStop(0, `rgba(255,255,255,${alpha * 0.05})`);
+      radFill.addColorStop(1, `rgba(255,255,255,0)`);
+      overlayCtx.beginPath();
+      overlayCtx.arc(x, y, circR, 0, Math.PI * 2);
+      overlayCtx.fillStyle = radFill;
+      overlayCtx.fill();
+
+      // ── Stroke: gold gradient (F4D058 → FFD53C → FFF7DA) combining all three Figma layers ──
+      // Gradient is angled relative to the circle's position on the ring for organic variety
+      const gAngle = angle + Math.PI * 0.25;
+      const strokeGrad = overlayCtx.createLinearGradient(
+        x + Math.cos(gAngle) * circR, y + Math.sin(gAngle) * circR,
+        x - Math.cos(gAngle) * circR, y - Math.sin(gAngle) * circR
+      );
+      strokeGrad.addColorStop(0,   `rgba(244,208,88,${alpha * 0.35})`);  // F4D058 @ 50% layer dominant
+      strokeGrad.addColorStop(0.5, `rgba(255,213,60,${alpha * 0.22})`);  // FFD53C @ 30% layer
+      strokeGrad.addColorStop(1,   `rgba(255,247,218,${alpha * 0.12})`); // FFF7DA @ 20% layer
+
+      // Soft gold glow (simulates the radial stroke spread)
+      overlayCtx.shadowBlur  = circR * 0.4;
+      overlayCtx.shadowColor = `rgba(244,208,88,${alpha * 0.08})`;
+
+      overlayCtx.beginPath();
+      overlayCtx.arc(x, y, circR, 0, Math.PI * 2);
+      overlayCtx.strokeStyle = strokeGrad;
+      overlayCtx.lineWidth   = Math.max(1.0, circR * 0.035);
+      overlayCtx.stroke();
+
+      overlayCtx.restore();
+    }
+  }
 }
 
 // ── Animation ──
@@ -1470,11 +1572,13 @@ function animate() {
   barGroup.rotation.y += (baseRotY + targetRotY * 0.5 * parallaxFade - barGroup.rotation.y) * 0.025;
   barGroup.rotation.x += (baseRotX + targetRotX * 0.5 * parallaxFade - barGroup.rotation.x) * 0.025;
 
+  drawRings(t, smoothScrollT);
   composer.render();
 }
 renderer.setAnimationLoop(animate);
 
 window.addEventListener('resize', () => {
+  resizeOverlay();
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.fov = camera.aspect < 1 ? Math.min(75, 40 / camera.aspect) : 40;
   camera.updateProjectionMatrix();
