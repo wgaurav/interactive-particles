@@ -13,7 +13,7 @@ scene.background = new THREE.Color(0x050505);
 const _initAspect = window.innerWidth / window.innerHeight;
 const _initFOV = _initAspect < 1 ? Math.min(75, 40 / _initAspect) : 40;
 const camera = new THREE.PerspectiveCamera(_initFOV, _initAspect, 0.1, 1000);
-camera.position.set(0, isMobile ? 1.2 : 1.8, isMobile ? 5.0 : 4.5);
+camera.position.set(0, isMobile ? 1.2 : 1.8, isMobile ? 5.5 : 4.5);
 camera.lookAt(0, isMobile ? 0.0 : 0.15, 0);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -442,6 +442,8 @@ const vertexShader = `
   uniform vec3 uMouse;
   uniform float uMouseActive;
   uniform float uPixelRatio;
+  uniform float uIntroExpand;
+  uniform float uIntroScatter;
 
   attribute vec3 aOriginal;
   attribute vec3 aNormal;
@@ -573,6 +575,7 @@ const vertexShader = `
     p.y += cos(t * 0.10 + aSeed * 6.28318 + 1.5708) * swayAmp * 0.7;
     p.z += sin(t * 0.09 + aSeed * 6.28318 + 3.1416) * swayAmp * 0.8;
 
+
     // Fade starts earlier and compresses into a shorter scroll window so
     // the mid-scroll cloud is noticeably thinner and the circle stage is sparse
     float fadeT = max(0.0, (uScrollT - 0.08) / 0.52);
@@ -590,7 +593,7 @@ const vertexShader = `
 
     float mouseDist = length(p - uMouse);
     float sizeInfluence = 1.0 - smoothstep(0.0, 0.55, mouseDist);
-    float sizeMult = (1.0 + sizeInfluence * 1.2 * uMouseActive) * scrollSizeMod;
+    float sizeMult = (1.0 + sizeInfluence * 1.5 * uMouseActive) * scrollSizeMod;
 
     vec3 lightDir1 = normalize(vec3(
       sin(uTime * 0.15) * 0.6, 0.8, cos(uTime * 0.2) * 0.5 + 0.3
@@ -612,7 +615,7 @@ const vertexShader = `
     // Small aScatterOffset adds natural variation without changing overall direction.
     float arrivalT = clamp(uIntroT * 1.35 - aSeed * 0.35, 0.0, 1.0);
     float introProgress = 1.0 - pow(1.0 - arrivalT, 3.0); // ease-out cubic
-    p = mix(p * 4.2 + aScatterOffset * 0.7, p, introProgress);
+    p = mix(p * uIntroExpand + aScatterOffset * uIntroScatter, p, introProgress);
 
     vec4 mv = modelViewMatrix * vec4(p, 1.0);
 
@@ -807,6 +810,24 @@ const fragmentShader = `
     float roll3 = exp(-pow(wp.x + cos(t * 0.08 + 1.4) * 0.9, 2.0) * 3.2) * 0.40;
     float rolling = clamp(roll1 + roll2 + roll3, 0.0, 0.90);
 
+    // ── Traveling sweep wave (bright → dark → bright, OMMA-style) ──────────
+    // Primary diagonal band moving across the bar
+    float sweepAxis  = wp.x * 0.75 + wp.z * 0.42;
+    float sweepPhase = sweepAxis * 2.0 - t * 0.18;
+    float sweepRaw   = 0.5 + 0.5 * sin(sweepPhase);
+    float sweep      = smoothstep(0.05, 0.95, sweepRaw);
+
+    // Secondary wave at a different angle — interference creates OMMA-like variety
+    float sweepAxis2  = wp.x * (-0.45) + wp.z * 0.88;
+    float sweepPhase2 = sweepAxis2 * 1.5 - t * 0.11;
+    float sweep2      = 0.5 + 0.5 * sin(sweepPhase2);
+    sweep = mix(sweep, sweep2, 0.30);
+
+    float sweepHighlight = sweep * sweep * 0.80;
+    float sweepShadow    = (1.0 - sweep) * (1.0 - sweep) * 0.65;
+    float sweepNet       = sweepHighlight - sweepShadow;
+    // ── end sweep ──────────────────────────────────────────────────────────
+
     // ── Dynamic mouse/auto-orbit light ──────────────────────────────────────
     // When cursor is anywhere on screen: directional light follows it, making
     // whichever side the cursor is on glow brighter — the "lighting changes on
@@ -827,7 +848,7 @@ const fragmentShader = `
     float dynLight = dynDiff * 0.55 + dynSpec * 0.35;
     // ── end dynamic light ───────────────────────────────────────────────────
 
-    float metalGradient = clamp(0.46 + ambientGrad * 0.22 + brightWave - darkEdge + surfaceNoise + darkShine + brushedEffect + sunTotal + brightBoost + glint + rolling + dynLight + vLogoEdge * 0.18, 0.0, 1.0);
+    float metalGradient = clamp(0.46 + ambientGrad * 0.22 + brightWave - darkEdge + surfaceNoise + darkShine + brushedEffect + sunTotal + brightBoost + glint + rolling + dynLight + sweepNet + vLogoEdge * 0.18, 0.0, 1.0);
 
     vec3 col = mix(deepShadow, darkGold,   smoothstep(0.00, 0.10, metalGradient));
     col = mix(col, shadowGold,             smoothstep(0.08, 0.20, metalGradient));
@@ -843,6 +864,12 @@ const fragmentShader = `
     col = mix(col, roseGold, roseFactor);
     col = mix(col, brightGold, pow(clamp(waveCombined, 0.0, 1.0), 1.5) * 0.35);
     col = mix(col, whiteShine, pow(clamp(waveCombined, 0.0, 1.0), 3.0) * 0.20);
+
+    // ── Sweep color temperature ─────────────────────────────────────────────
+    // Crest: push toward warm white-gold shine
+    col = mix(col, whiteShine, sweep * sweep * 0.62);
+    // Trough: multiply down toward deep shadow — creates OMMA-like dark zones
+    col *= mix(0.42, 1.0, sweep);
 
     float yNorm = clamp((wp.y + 0.234) / 0.468, 0.0, 1.0);
     float edgeHalfW = mix(1.3, 1.092, yNorm);
@@ -949,7 +976,9 @@ const mat = new THREE.ShaderMaterial({
     uMouseScreen: { value: new THREE.Vector2(0, 0) },
     uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) },
     uIntroT: { value: 0 },
-    uScrollT: { value: 0 }
+    uScrollT: { value: 0 },
+    uIntroExpand:  { value: isMobile ? 1.0 : 4.2 },
+    uIntroScatter: { value: isMobile ? 4.0 : 0.7 }
   },
   transparent: true,
   depthWrite: false,
@@ -1378,8 +1407,8 @@ window.addEventListener('scroll', () => {
 // ── Camera scroll keyframes [scrollT, pos, lookAt] ──
 // 3-point: zoom in, then continuously pull back — no static hover phase
 const camKF = isMobile ? [
-  { t: 0.00, p: [0, 1.2, 5.0], l: [0, 0.0, 0] },
-  { t: 0.30, p: [0, 0.5, 4.2], l: [0, 0.0, 0] },
+  { t: 0.00, p: [0, 1.2, 5.5], l: [0, 0.0, 0] },
+  { t: 0.30, p: [0, 0.5, 2.0], l: [0, 0.0, 0] },
   { t: 1.00, p: [0, 1.5, 9.5], l: [0, 0.0, 0] },
 ] : [
   { t: 0.00, p: [0, 1.8, 4.5], l: [0, 0.15, 0] },
@@ -1528,11 +1557,10 @@ function animate() {
   const dt = Math.min(t - lastTime, 0.033);
   lastTime = t;
 
-  const influenceRadius = 0.40;
-  const repelStrength   = 5.0;
-  const springK         = 1.6;
-  const damping         = 2.2;
-  const maxDisp         = 0.11;
+  const influenceRadius = 0.62;
+  const springK         = 0.7;
+  const damping         = 1.2;
+  const maxDisp         = 0.15;
 
   if (!isMobile) for (let i = 0; i < PARTICLE_COUNT; i++) {
     const i3 = i * 3;
@@ -1547,21 +1575,18 @@ function animate() {
       const dist = Math.sqrt(toMouseX*toMouseX + toMouseY*toMouseY + toMouseZ*toMouseZ);
       if (dist < influenceRadius && dist > 0.001) {
         const falloff = Math.pow(1.0 - dist / influenceRadius, 2);
-        const invDist = 1.0 / dist;
-        // Raw repel direction (away from cursor)
-        let rx = -toMouseX * invDist;
-        let ry = -toMouseY * invDist;
-        let rz = -toMouseZ * invDist;
-        // Project onto surface tangent plane — particles slide along the surface
-        // instead of flying off edges, exactly like Morpho's sphere particles
-        const nx = norms[i3], ny = norms[i3+1], nz = norms[i3+2];
-        const rDotN = rx*nx + ry*ny + rz*nz;
-        rx -= rDotN * nx;
-        ry -= rDotN * ny;
-        rz -= rDotN * nz;
-        fx += rx * repelStrength * falloff;
-        fy += ry * repelStrength * falloff;
-        fz += rz * repelStrength * falloff;
+        // Only push particles when cursor is moving — no static force so they
+        // never pile up or freeze when the cursor stops
+        const velMag = Math.sqrt(mouseVelX * mouseVelX + mouseVelZ * mouseVelZ);
+        if (velMag > 0.05) {
+          const nx = norms[i3], ny = norms[i3+1], nz = norms[i3+2];
+          const vx = mouseVelX / velMag, vz = mouseVelZ / velMag;
+          let kx = vx, ky = 0, kz = vz;
+          const kDotN = kx*nx + ky*ny + kz*nz;
+          kx -= kDotN * nx; ky -= kDotN * ny; kz -= kDotN * nz;
+          const velScale = Math.min(velMag / 3.5, 1.0) * 3.0 * falloff;
+          fx += kx * velScale; fy += ky * velScale; fz += kz * velScale;
+        }
       }
     }
 
