@@ -72,13 +72,13 @@ const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
 const bloomPass = new UnrealBloomPass(
   new THREE.Vector2(window.innerWidth, window.innerHeight),
-  0.12,   // strength  — barely perceptible
-  0.25,   // radius    — very tight, stays on the pixel
-  0.88    // threshold — only absolute peak whites bloom
+  0.42,   // visible glow around bright particles
+  0.45,   // wide enough for halo effect
+  0.74    // catches the bright-gold and white-shine particles
 );
 composer.addPass(bloomPass);
 composer.addPass(new OutputPass());
-if (isMobile) { bloomPass.strength = 0.05; bloomPass.radius = 0.15; }
+if (isMobile) { bloomPass.strength = 0.18; bloomPass.radius = 0.25; }
 
 // ── Mouse tracking ──
 const mouse3D = new THREE.Vector3(9999, 9999, 0);
@@ -811,17 +811,17 @@ const fragmentShader = `
     float rolling = clamp(roll1 + roll2 + roll3, 0.0, 0.90);
 
     // ── Traveling sweep wave (bright → dark → bright, OMMA-style) ──────────
-    // Primary diagonal band moving across the bar
+    // Primary gradient — one full wave wider than the bar, so you see one smooth
+    // dark-to-bright gradient at a time (Morpho-style half-lit hemisphere look)
     float sweepAxis  = wp.x * 0.75 + wp.z * 0.42;
-    float sweepPhase = sweepAxis * 2.0 - t * 0.18;
-    float sweepRaw   = 0.5 + 0.5 * sin(sweepPhase);
-    float sweep      = smoothstep(0.05, 0.95, sweepRaw);
+    float sweepPhase = sweepAxis * 1.5 - t * 0.55;
+    float sweep      = 0.5 + 0.5 * sin(sweepPhase);   // smooth gradient, no smoothstep
 
-    // Secondary wave at a different angle — interference creates OMMA-like variety
+    // Secondary wave adds organic variety without sharp banding
     float sweepAxis2  = wp.x * (-0.45) + wp.z * 0.88;
-    float sweepPhase2 = sweepAxis2 * 1.5 - t * 0.11;
+    float sweepPhase2 = sweepAxis2 * 1.2 - t * 0.34;
     float sweep2      = 0.5 + 0.5 * sin(sweepPhase2);
-    sweep = mix(sweep, sweep2, 0.30);
+    sweep = mix(sweep, sweep2, 0.28);
 
     float sweepHighlight = sweep * sweep * 0.80;
     float sweepShadow    = (1.0 - sweep) * (1.0 - sweep) * 0.65;
@@ -865,11 +865,15 @@ const fragmentShader = `
     col = mix(col, brightGold, pow(clamp(waveCombined, 0.0, 1.0), 1.5) * 0.35);
     col = mix(col, whiteShine, pow(clamp(waveCombined, 0.0, 1.0), 3.0) * 0.20);
 
-    // ── Sweep color temperature ─────────────────────────────────────────────
-    // Crest: push toward warm white-gold shine
-    col = mix(col, whiteShine, sweep * sweep * 0.62);
-    // Trough: multiply down toward deep shadow — creates OMMA-like dark zones
-    col *= mix(0.42, 1.0, sweep);
+    // ── Sweep color temperature (Morpho-style) ─────────────────────────────
+    // Trough: deep shadow — near-black in dark zone for dramatic contrast
+    col *= mix(0.15, 1.0, sweep);
+    // Crest: push base color toward warm white-gold
+    col = mix(col, whiteShine, sweep * sweep * 0.58);
+    // Bright particles in the lit zone flare up — the "gap" texture visible in light
+    col = mix(col, warmGold,   vBright * sweep * sweep * 0.62);
+    col = mix(col, brightGold, vBright * pow(sweep, 3.0) * 0.55);
+    col = mix(col, whiteShine, vBright * pow(sweep, 4.0) * 0.38);
 
     float yNorm = clamp((wp.y + 0.234) / 0.468, 0.0, 1.0);
     float edgeHalfW = mix(1.3, 1.092, yNorm);
@@ -918,26 +922,45 @@ const fragmentShader = `
     col = max(col, deepShadow * 0.90);
     col = clamp(col, 0.0, 1.0);
 
+    // ── Traveling interior wave — light from inside through particle gaps ────
+    // A band of light sweeps the bar length every ~7 s. Bright particles (gaps)
+    // flare to warm-white gold; dark particles hold deep — internal light leaking
+    // through the cloud. Two waves offset by half a cycle keep it always alive.
+    float tWv_axis = wp.x * 0.82 + wp.z * 0.25;
+    float tWv1_pos = mix(-2.2, 2.2, mod(t * 0.065, 1.0));
+    float tWv2_pos = mix(-2.2, 2.2, mod(t * 0.065 + 0.5, 1.0));
+    float tWv1     = exp(-pow(tWv_axis - tWv1_pos, 2.0) * 2.2);
+    float tWv2     = exp(-pow(tWv_axis - tWv2_pos, 2.0) * 2.2) * 0.62;
+    float tWvTotal = clamp(tWv1 + tWv2, 0.0, 1.0);
+
+    col = mix(col, warmGold,   vBright * tWvTotal * 0.50);
+    col = mix(col, brightGold, vBright * tWvTotal * tWvTotal * 0.55);
+    col = mix(col, whiteShine, vBright * tWvTotal * tWvTotal * tWvTotal * 0.48);
+    col *= 1.0 - (1.0 - vBright) * tWvTotal * 0.30;
+    // ── end traveling wave ───────────────────────────────────────────────────
+
     // ── Internal moving point light ────────────────────────────────────────
     // A bright orb moves inside the bar volume. Particles close to it flare
     // to near-white, simulating light leaking through particle gaps.
     // Auto-orbits slowly when idle; shifts with mouse position when active.
     vec3 autoIntPos = vec3(
-      sin(t * 0.08) * 1.05,
-      -0.02 + sin(t * 0.05 + 1.1) * 0.14,
-      cos(t * 0.06) * 0.24
+      sin(t * 0.38) * 1.05,
+      -0.02 + sin(t * 0.26 + 1.1) * 0.14,
+      cos(t * 0.31) * 0.24
     );
     vec3 mouseIntPos = vec3(uMouseScreen.x * 1.15, uMouseScreen.y * 0.15, 0.15);
     vec3 intLightPos = mix(autoIntPos, mouseIntPos, uMouseActive);
 
-    float intDist    = length(wp - intLightPos);
-    float intGlow    = exp(-intDist * intDist * 2.8);          // wide soft orb
-    float intGlowSharp = exp(-intDist * intDist * 12.0);       // bright hot core
-    float intTotal   = intGlow * 0.55 + intGlowSharp * 0.90;
+    float intDist      = length(wp - intLightPos);
+    float intGlow      = exp(-intDist * intDist * 2.8);
+    float intGlowSharp = exp(-intDist * intDist * 12.0);
+    float intTotal     = intGlow * 0.55 + intGlowSharp * 0.90;
 
-    // Tint: warm white-gold that washes toward pure white at the hot core
+    // Selective: bright particles (gaps) flare strongly; dark ones absorb
+    float intSelectivity = vBright * 1.0 + (1.0 - vBright) * 0.28;
     vec3 intCol = mix(vec3(0.95, 0.84, 0.42), vec3(1.0, 0.97, 0.82), intGlowSharp);
-    col = mix(col, intCol, clamp(intTotal * 0.80, 0.0, 0.88));
+    col = mix(col, intCol, clamp(intTotal * 0.88 * intSelectivity, 0.0, 0.92));
+    col = mix(col, pureWhite, vBright * intGlowSharp * 0.52);
     // ── end internal light ─────────────────────────────────────────────────
 
     // Per-dot sphere shading — warm highlight at center, dims toward edge
@@ -1466,7 +1489,7 @@ function drawRings(t, sst) {
   if (alpha < 0.005) return;
 
   const rings = [
-    { radius: ref * 0.38, circleR: ref * 0.052, dir:  1, speed: 0.09, ri: 0 },
+    { radius: ref * 0.33, circleR: ref * 0.045, dir:  1, speed: 0.09, ri: 0 },
     { radius: ref * 0.62, circleR: ref * 0.038, dir: -1, speed: 0.06, ri: 1 },
   ];
 
