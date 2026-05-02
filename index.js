@@ -28,11 +28,45 @@ const overlayCanvas = document.createElement('canvas');
 overlayCanvas.style.cssText = 'position:fixed;top:0;left:0;pointer-events:none;z-index:10;';
 document.body.appendChild(overlayCanvas);
 const overlayCtx = overlayCanvas.getContext('2d');
+const overlayDpr = Math.min(window.devicePixelRatio, 2);
 function resizeOverlay() {
-  overlayCanvas.width = window.innerWidth;
-  overlayCanvas.height = window.innerHeight;
+  overlayCanvas.width  = Math.round(window.innerWidth  * overlayDpr);
+  overlayCanvas.height = Math.round(window.innerHeight * overlayDpr);
+  overlayCanvas.style.width  = window.innerWidth  + 'px';
+  overlayCanvas.style.height = window.innerHeight + 'px';
+  overlayCtx.setTransform(overlayDpr, 0, 0, overlayDpr, 0, 0);
 }
 resizeOverlay();
+
+// Preload company logos — inner ring first (index 0), outer ring second (index 1)
+const ringLogos = [
+  [
+    'company logos/chainlink 1.svg',
+    'company logos/image (1) 1.png',
+    'company logos/image (2) 1.png',
+    'company logos/eth-diamond-(purple) 2.png',
+    'company logos/metamask 1.svg',
+    'company logos/image (3) 2.png',
+    'company logos/united_nations 1.svg',
+    'company logos/image (4) 1.png',
+  ],
+  [
+    'company logos/image 1078.png',
+    'company logos/deloitte 1.png',
+    'company logos/sumsub 1.svg',
+    'company logos/fireblocks 1.svg',
+    'company logos/image (5) 1.png',
+    'company logos/uniswap 1.svg',
+    'company logos/image (6) 1.png',
+    'company logos/image 1080 [Vectorized].svg',
+  ],
+].map(group => group.map(src => {
+  const img = new Image();
+  img.loaded = false;
+  img.onload = () => { img.loaded = true; };
+  img.src = encodeURI(src);
+  return img;
+}));
 
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
@@ -1403,8 +1437,8 @@ function drawRings(t, sst) {
   if (alpha < 0.005) return;
 
   const rings = [
-    { radius: ref * 0.38, circleR: ref * 0.052, dir:  1, speed: 0.09 },
-    { radius: ref * 0.62, circleR: ref * 0.052, dir: -1, speed: 0.06 },
+    { radius: ref * 0.38, circleR: ref * 0.052, dir:  1, speed: 0.09, ri: 0 },
+    { radius: ref * 0.62, circleR: ref * 0.038, dir: -1, speed: 0.06, ri: 1 },
   ];
 
   for (const ring of rings) {
@@ -1457,6 +1491,28 @@ function drawRings(t, sst) {
       overlayCtx.strokeStyle = strokeGrad;
       overlayCtx.lineWidth   = Math.max(1.0, circR * 0.035);
       overlayCtx.stroke();
+
+      // ── Logo ──
+      const logo = ringLogos[ring.ri][i];
+      if (logo && logo.loaded) {
+        overlayCtx.save();
+        overlayCtx.globalAlpha = alpha * 0.92;
+        overlayCtx.beginPath();
+        overlayCtx.arc(x, y, circR * 0.82, 0, Math.PI * 2);
+        overlayCtx.clip();
+        // maxDim ≤ clipRadius × √2 ensures even square logos never clip at corners
+        // clipRadius = circR × 0.82 → max safe = circR × 1.16; use 1.08 for breathing room
+        const maxDim = circR * 1.08;
+        const nw = logo.naturalWidth  || 1;
+        const nh = logo.naturalHeight || 1;
+        const aspect = nw / nh;
+        const drawW = aspect >= 1 ? maxDim : maxDim * aspect;
+        const drawH = aspect >= 1 ? maxDim / aspect : maxDim;
+        overlayCtx.imageSmoothingEnabled = true;
+        overlayCtx.imageSmoothingQuality = 'high';
+        overlayCtx.drawImage(logo, x - drawW / 2, y - drawH / 2, drawW, drawH);
+        overlayCtx.restore();
+      }
 
       overlayCtx.restore();
     }
