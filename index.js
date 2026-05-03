@@ -828,6 +828,28 @@ const fragmentShader = `
     float sweepNet       = sweepHighlight - sweepShadow;
     // ── end sweep ──────────────────────────────────────────────────────────
 
+    // ── Idle shimmer wave (default / no-cursor state) ───────────────────────
+    // Two wave fronts sweep the bar. Wide per-particle seed jitter means
+    // adjacent particles respond at different times — individual particle
+    // pulses rather than a uniform band. Outside the wave: particles darken
+    // deeply so the lit zone creates real contrast.
+
+    // Wave 1 — diagonal NE, ~9 s cycle
+    float shimAxis1  = wp.x * 0.82 + wp.z * 0.32;
+    float shimFront1 = mix(-1.8, 1.8, mod(t * 0.110, 1.0));
+    float shimSeed1  = (vSeed - 0.5) * 0.85;            // wide jitter = organic scatter
+    float shimGlow1  = exp(-pow(shimAxis1 + shimSeed1 - shimFront1, 2.0) * 4.8);
+
+    // Wave 2 — diagonal NW, ~13 s cycle, half-phase offset so one is always crossing
+    float shimAxis2  = wp.x * (-0.55) + wp.z * 0.72;
+    float shimFront2 = mix(-1.4, 1.4, mod(t * 0.077 + 0.5, 1.0));
+    float shimSeed2  = (fract(vSeed * 5.17 + 0.23) - 0.5) * 0.80;
+    float shimGlow2  = exp(-pow(shimAxis2 + shimSeed2 - shimFront2, 2.0) * 4.2) * 0.88;
+
+    float idleShimmer = clamp(shimGlow1 + shimGlow2, 0.0, 1.0);
+    float idleBlend   = 1.0 - uMouseActive;   // fades out when cursor becomes active
+    // ── end idle shimmer ────────────────────────────────────────────────────
+
     // ── Dynamic mouse/auto-orbit light ──────────────────────────────────────
     // When cursor is anywhere on screen: directional light follows it, making
     // whichever side the cursor is on glow brighter — the "lighting changes on
@@ -874,6 +896,17 @@ const fragmentShader = `
     col = mix(col, warmGold,   vBright * sweep * sweep * 0.62);
     col = mix(col, brightGold, vBright * pow(sweep, 3.0) * 0.55);
     col = mix(col, whiteShine, vBright * pow(sweep, 4.0) * 0.38);
+
+    // Idle shimmer — darken base heavily so wave contrast is dramatic,
+    // then layer warm amber → gold → highlight on the lit zone.
+    vec3 deepAmber = vec3(0.88, 0.55, 0.05);
+    float shimmerOn = idleShimmer * idleBlend;
+    // Darken everything outside the wave; restore to full as wave arrives
+    col *= mix(1.0, mix(0.32, 1.0, idleShimmer), idleBlend);
+    col = mix(col, deepAmber,  shimmerOn * 0.78);
+    col = mix(col, warmGold,   shimmerOn * shimmerOn * 0.88);
+    col = mix(col, brightGold, pow(shimmerOn, 2.5) * 0.78);
+    col = mix(col, whiteShine, pow(shimmerOn, 3.5) * 0.52);
 
     float yNorm = clamp((wp.y + 0.234) / 0.468, 0.0, 1.0);
     float edgeHalfW = mix(1.3, 1.092, yNorm);
