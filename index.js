@@ -1073,6 +1073,7 @@ const logoFragShader = `
   uniform sampler2D uLogoMap;
   uniform float uTime;
   uniform float uOpacity;
+  uniform float uIntroGlow;
   varying vec2 vUv;
   varying vec3 vWorldPos;
   varying vec3 vNormal;
@@ -1147,7 +1148,9 @@ const logoFragShader = `
     float totalShine = (ringSharp + ringGlow + edgeWaveIntensity + sparkleGlint + centerFlash2) * logoActivation + edgeShimmer;
     vec3 shineColor = mix(vec3(0.95, 0.82, 0.45), vec3(1.0, 0.97, 0.90), smoothstep(0.3, 0.9, totalShine));
 
+    vec3 warmGoldBoost = vec3(0.85, 0.68, 0.28);
     vec3 finalCol = baseCol + shineColor * totalShine * 0.55;
+    finalCol = mix(finalCol, finalCol * 1.6 + warmGoldBoost * 0.35, uIntroGlow);
     gl_FragColor = vec4(clamp(finalCol, 0.0, 1.0), texel.a * 0.95 * uOpacity);
   }
 `;
@@ -1158,7 +1161,8 @@ const logoMat = new THREE.ShaderMaterial({
   uniforms: {
     uLogoMap: { value: logoTexture },
     uTime: { value: 0 },
-    uOpacity: { value: 0 }
+    uOpacity: { value: 0 },
+    uIntroGlow: { value: 0 }
   },
   transparent: true,
   depthTest: false,
@@ -1777,17 +1781,20 @@ function animate() {
   smoothScrollT += (scrollT - smoothScrollT) * 0.06;
   mat.uniforms.uScrollT.value = smoothScrollT;
 
-  // Intro phase: crack particles assemble into logo; logo texture fades in at the very end
+  // Intro phase: crack particles assemble into logo; logo texture crossfades in
   const isIntroPhase = introT < 1.0;
-  // ease the assembly so it feels organic (matches bar particle ease-out)
   const introEased = introT * introT * (3.0 - 2.0 * introT);
   const introCrackProgress = 1.0 - introEased;
-  // Crossfade window: crack fades OUT while logo fades IN over the same range (70–100% of intro)
-  const crossfade   = Math.max(0, Math.min(1, (introT - 0.70) / 0.30));
-  const logoFadeIn  = crossfade;
+  // Long crossfade: crack fades out, logo fades in, over 40–100% of intro
+  const crossfade  = Math.max(0, Math.min(1, (introT - 0.40) / 0.60));
+  const logoFadeIn = crossfade;
   const logoFadeOut = 1 - Math.max(0, Math.min(1, (smoothScrollT - 0.02) / 0.18));
   logoMat.uniforms.uOpacity.value = logoFadeIn * logoFadeOut;
   logoMesh.visible = logoMat.uniforms.uOpacity.value > 0.001;
+  // Intro glow: logo starts warm/bright (matching crack particles), settles over 3s after intro
+  const postIntroT = Math.max(0, t - 2.8);
+  const introGlow  = isIntroPhase ? 1.0 : Math.max(0, 1.0 - postIntroT / 3.0);
+  logoMat.uniforms.uIntroGlow.value = introGlow * crossfade;
 
   // Crack: assembles during intro (fading out as logo fades in), disintegrates on scroll
   const crackProgress = Math.max(0, Math.min(1, (smoothScrollT - 0.02) / 0.60));
