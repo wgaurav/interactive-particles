@@ -622,7 +622,7 @@ const vertexShader = `
     // Size: variety and fade grow continuously with spread
     float starSz = 0.6 + aSeed * 1.4;
     float netSizeMult = mix(1.0, starSz * netAlpha, spreadT);
-    gl_PointSize = 2.2 * uPixelRatio * sizeMult * netSizeMult;
+    gl_PointSize = 3.2 * uPixelRatio * sizeMult * netSizeMult;
 
     gl_Position = projectionMatrix * mv;
     vLogoParticle = 0.0;
@@ -961,18 +961,18 @@ const fragmentShader = `
 
     // Ocean shadow waves — chaotic multi-directional interference (OMMA-style)
     // Applied here so hover/internal-light effects layer cleanly on top
-    float ow1 = sin((wp.y * 1.2 + wp.x * 0.3) * 6.5 + t * 4.125);
-    float ow2 = sin((wp.z * 1.3 + wp.x * -0.4) * 7.0 + t * 4.5);
-    float ow3 = sin((wp.x * 0.7 + wp.y * 0.9 + wp.z * 0.5) * 6.8 - t * 3.75);
-    float ow4 = snoise(vec3(wp.x * 3.2 - t * 0.9, wp.z * 3.2 + t * 1.2, wp.y * 2.5 + t * 0.675));
-    float ow5 = snoise(vec3(wp.y * 3.5 + t * 1.05, wp.x * 2.3 - t * 0.75, wp.z * 2.8 - t * 0.525));
+    float ow1 = sin((wp.y * 1.2 + wp.x * 0.3) * 6.5 + t * 6.5);
+    float ow2 = sin((wp.z * 1.3 + wp.x * -0.4) * 7.0 + t * 7.2);
+    float ow3 = sin((wp.x * 0.7 + wp.y * 0.9 + wp.z * 0.5) * 6.8 - t * 5.8);
+    float ow4 = snoise(vec3(wp.x * 3.2 - t * 1.4, wp.z * 3.2 + t * 1.9, wp.y * 2.5 + t * 1.1));
+    float ow5 = snoise(vec3(wp.y * 3.5 + t * 1.7, wp.x * 2.3 - t * 1.2, wp.z * 2.8 - t * 0.9));
     float oceanMix    = (ow1 * 1.0 + ow2 * 0.9 + ow3 * 0.8 + ow4 * 1.3 + ow5 * 1.0) / 3.5;
-    float oceanBiased = pow(clamp(oceanMix * 0.5 + 0.5, 0.0, 1.0), 0.52);
-    float oceanShadow = clamp(mix(0.38, 1.20, oceanBiased), 0.38, 1.20);
-    float shadowDepth = smoothstep(0.70, 0.30, oceanShadow);
-    float finalOcean  = oceanShadow * (1.0 - shadowDepth * (0.28 + 0.10 * sin(t * 0.1)));
-    float shadowContrast = mix(0.82, 1.0, smoothstep(0.30, 0.75, finalOcean));
-    col *= mix(1.0, finalOcean * shadowContrast, 0.70);
+    float oceanBiased = pow(clamp(oceanMix * 0.5 + 0.5, 0.0, 1.0), 0.45);
+    float oceanShadow = clamp(mix(0.28, 1.25, oceanBiased), 0.28, 1.25);
+    float shadowDepth = smoothstep(0.70, 0.25, oceanShadow);
+    float finalOcean  = oceanShadow * (1.0 - shadowDepth * (0.32 + 0.12 * sin(t * 0.1)));
+    float shadowContrast = mix(0.80, 1.0, smoothstep(0.28, 0.72, finalOcean));
+    col *= mix(1.0, finalOcean * shadowContrast, 0.82);
     col = max(col, deepShadow * 0.85);
 
     // Mouse proximity flare — bright warm-white bloom on nearby particles
