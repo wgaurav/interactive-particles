@@ -72,13 +72,13 @@ const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
 const bloomPass = new UnrealBloomPass(
   new THREE.Vector2(window.innerWidth, window.innerHeight),
-  0.42,   // visible glow around bright particles
-  0.45,   // wide enough for halo effect
-  0.74    // catches the bright-gold and white-shine particles
+  0.38,   // strength
+  0.20,   // tight radius — prevents adjacent particles bleeding into each other
+  0.74    // threshold
 );
 composer.addPass(bloomPass);
 composer.addPass(new OutputPass());
-if (isMobile) { bloomPass.strength = 0.18; bloomPass.radius = 0.25; }
+if (isMobile) { bloomPass.strength = 0.16; bloomPass.radius = 0.12; }
 
 // ── Mouse tracking ──
 const mouse3D = new THREE.Vector3(9999, 9999, 0);
@@ -622,7 +622,7 @@ const vertexShader = `
     // Size: variety and fade grow continuously with spread
     float starSz = 0.6 + aSeed * 1.4;
     float netSizeMult = mix(1.0, starSz * netAlpha, spreadT);
-    gl_PointSize = 2.6 * uPixelRatio * sizeMult * netSizeMult;
+    gl_PointSize = 2.2 * uPixelRatio * sizeMult * netSizeMult;
 
     gl_Position = projectionMatrix * mv;
     vLogoParticle = 0.0;
