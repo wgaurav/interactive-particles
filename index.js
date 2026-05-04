@@ -1776,16 +1776,16 @@ function animate() {
   smoothScrollT += (scrollT - smoothScrollT) * 0.06;
   mat.uniforms.uScrollT.value = smoothScrollT;
 
-  // Logo fades in with the bar intro, then cross-fades to crack particles on scroll
+  // Logo fades in with bar intro; as soon as scroll starts it cross-fades to crack
   const logoFadeIn  = Math.min(1, introT * 3);
-  const logoFadeOut = 1 - Math.max(0, Math.min(1, (smoothScrollT - 0.47) / 0.05));
+  const logoFadeOut = 1 - Math.max(0, Math.min(1, (smoothScrollT - 0.02) / 0.06));
   logoMat.uniforms.uOpacity.value = logoFadeIn * logoFadeOut;
   logoMesh.visible = logoMat.uniforms.uOpacity.value > 0.001;
 
-  // Crack disintegration: triggers at scrollT 0.50, completes at 0.80
-  const crackProgress = Math.max(0, Math.min(1, (smoothScrollT - 0.50) / 0.30));
+  // Crack disintegration: starts on first scroll, completes just after zoom-in finishes
+  const crackProgress = Math.max(0, Math.min(1, (smoothScrollT - 0.02) / 0.33));
   if (crackSystem) {
-    crackSystem.visible = smoothScrollT > 0.47 && crackProgress < 1.0;
+    crackSystem.visible = smoothScrollT > 0.02 && crackProgress < 1.0;
     crackSystem.material.uniforms.uCrackProgress.value = crackProgress;
     crackSystem.material.uniforms.uTime.value = t;
   }
