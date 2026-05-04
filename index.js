@@ -593,7 +593,7 @@ const vertexShader = `
 
     float mouseDist = length(p - uMouse);
     float sizeInfluence = 1.0 - smoothstep(0.0, 0.55, mouseDist);
-    float sizeMult = (1.0 + sizeInfluence * 0.80 * uMouseActive) * scrollSizeMod;
+    float sizeMult = (1.0 + sizeInfluence * 1.5 * uMouseActive) * scrollSizeMod;
 
     vec3 lightDir1 = normalize(vec3(
       sin(uTime * 0.15) * 0.6, 0.8, cos(uTime * 0.2) * 0.5 + 0.3
@@ -975,10 +975,9 @@ const fragmentShader = `
     col *= mix(1.0, finalOcean * shadowContrast, 0.82);
     col = max(col, deepShadow * 0.85);
 
-    // Mouse proximity — warm gold brightening with a crisp highlight at the core
-    col = mix(col, warmGold,   mouseBright * 0.65);
-    col = mix(col, brightGold, mouseBright * mouseBright * 0.70);
-    col = mix(col, whiteShine, pow(mouseBright, 3.0) * 0.60);
+    // Mouse proximity flare — bright warm-white bloom on nearby particles
+    col = mix(col, pureWhite, mouseBright * 0.75);
+    col = mix(col, whiteShine, mouseBright * 0.50);
 
     col = max(col, deepShadow * 0.90);
     col = clamp(col, 0.0, 1.0);
@@ -1738,10 +1737,10 @@ function animate() {
   const dt = Math.min(t - lastTime, 0.033);
   lastTime = t;
 
-  const influenceRadius = 0.50;
-  const springK         = 4.0;
-  const damping         = 3.5;
-  const maxDisp         = 0.06;
+  const influenceRadius = 0.62;
+  const springK         = 0.7;
+  const damping         = 1.2;
+  const maxDisp         = 0.15;
 
   if (!isMobile) for (let i = 0; i < PARTICLE_COUNT; i++) {
     const i3 = i * 3;
@@ -1763,7 +1762,7 @@ function animate() {
           let kx = vx, ky = 0, kz = vz;
           const kDotN = kx*nx + ky*ny + kz*nz;
           kx -= kDotN * nx; ky -= kDotN * ny; kz -= kDotN * nz;
-          const velScale = Math.min(velMag / 3.5, 1.0) * 1.2 * falloff;
+          const velScale = Math.min(velMag / 3.5, 1.0) * 3.0 * falloff;
           fx += kx * velScale; fy += ky * velScale; fz += kz * velScale;
         }
       }
