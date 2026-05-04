@@ -959,6 +959,22 @@ const fragmentShader = `
     col = mix(col, whiteShine, totalFrontBottom * 0.50);
     col = mix(col, brightGold, totalFrontBottom * 0.30);
 
+    // Ocean shadow waves — chaotic multi-directional interference (OMMA-style)
+    // Applied here so hover/internal-light effects layer cleanly on top
+    float ow1 = sin((wp.y * 1.2 + wp.x * 0.3) * 6.5 + t * 4.125);
+    float ow2 = sin((wp.z * 1.3 + wp.x * -0.4) * 7.0 + t * 4.5);
+    float ow3 = sin((wp.x * 0.7 + wp.y * 0.9 + wp.z * 0.5) * 6.8 - t * 3.75);
+    float ow4 = snoise(vec3(wp.x * 3.2 - t * 0.9, wp.z * 3.2 + t * 1.2, wp.y * 2.5 + t * 0.675));
+    float ow5 = snoise(vec3(wp.y * 3.5 + t * 1.05, wp.x * 2.3 - t * 0.75, wp.z * 2.8 - t * 0.525));
+    float oceanMix    = (ow1 * 1.0 + ow2 * 0.9 + ow3 * 0.8 + ow4 * 1.3 + ow5 * 1.0) / 3.5;
+    float oceanBiased = pow(clamp(oceanMix * 0.5 + 0.5, 0.0, 1.0), 0.52);
+    float oceanShadow = clamp(mix(0.55, 1.15, oceanBiased), 0.55, 1.15);
+    float shadowDepth = smoothstep(0.70, 0.30, oceanShadow);
+    float finalOcean  = oceanShadow * (1.0 - shadowDepth * (0.20 + 0.06 * sin(t * 0.1)));
+    float shadowContrast = mix(0.88, 1.0, smoothstep(0.40, 0.85, finalOcean));
+    col *= mix(1.0, finalOcean * shadowContrast, 0.40);
+    col = max(col, deepShadow * 0.85);
+
     // Mouse proximity flare — bright warm-white bloom on nearby particles
     col = mix(col, pureWhite, mouseBright * 0.75);
     col = mix(col, whiteShine, mouseBright * 0.50);
@@ -1006,21 +1022,6 @@ const fragmentShader = `
     col = mix(col, intCol, clamp(intTotal * 0.88 * intSelectivity, 0.0, 0.92));
     col = mix(col, pureWhite, vBright * intGlowSharp * 0.52);
     // ── end internal light ─────────────────────────────────────────────────
-
-    // Ocean shadow waves — chaotic multi-directional interference (OMMA-style)
-    float ow1 = sin((wp.y * 1.2 + wp.x * 0.3) * 6.5 + t * 4.125);
-    float ow2 = sin((wp.z * 1.3 + wp.x * -0.4) * 7.0 + t * 4.5);
-    float ow3 = sin((wp.x * 0.7 + wp.y * 0.9 + wp.z * 0.5) * 6.8 - t * 3.75);
-    float ow4 = snoise(vec3(wp.x * 3.2 - t * 0.9, wp.z * 3.2 + t * 1.2, wp.y * 2.5 + t * 0.675));
-    float ow5 = snoise(vec3(wp.y * 3.5 + t * 1.05, wp.x * 2.3 - t * 0.75, wp.z * 2.8 - t * 0.525));
-    float oceanMix    = (ow1 * 1.0 + ow2 * 0.9 + ow3 * 0.8 + ow4 * 1.3 + ow5 * 1.0) / 3.5;
-    float oceanBiased = pow(clamp(oceanMix * 0.5 + 0.5, 0.0, 1.0), 0.52);
-    float oceanShadow = clamp(mix(0.55, 1.15, oceanBiased), 0.55, 1.15);
-    float shadowDepth = smoothstep(0.70, 0.30, oceanShadow);
-    float finalOcean  = oceanShadow * (1.0 - shadowDepth * (0.20 + 0.06 * sin(t * 0.1)));
-    float shadowContrast = mix(0.88, 1.0, smoothstep(0.40, 0.85, finalOcean));
-    col *= mix(1.0, finalOcean * shadowContrast, 0.60);
-    col = max(col, deepShadow * 0.85);
 
     // Per-dot sphere shading — warm highlight at center, dims toward edge
     float dotLift = max(0.40 - d, 0.0) * 2.80;
