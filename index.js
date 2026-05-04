@@ -1776,17 +1776,27 @@ function animate() {
   smoothScrollT += (scrollT - smoothScrollT) * 0.06;
   mat.uniforms.uScrollT.value = smoothScrollT;
 
-  // Logo fades in with bar intro; as soon as scroll starts it cross-fades to crack
-  const logoFadeIn  = Math.min(1, introT * 3);
+  // Intro phase: crack particles assemble into logo; logo texture fades in at the very end
+  const isIntroPhase = introT < 1.0;
+  // ease the assembly so it feels organic (matches bar particle ease-out)
+  const introEased = introT * introT * (3.0 - 2.0 * introT);
+  const introCrackProgress = 1.0 - introEased;
+  // Logo texture appears only in the final stretch of intro (80–100%) to crossfade over assembled particles
+  const logoFadeIn  = Math.max(0, Math.min(1, (introT - 0.80) / 0.20));
   const logoFadeOut = 1 - Math.max(0, Math.min(1, (smoothScrollT - 0.02) / 0.18));
   logoMat.uniforms.uOpacity.value = logoFadeIn * logoFadeOut;
   logoMesh.visible = logoMat.uniforms.uOpacity.value > 0.001;
 
-  // Crack disintegration: starts on first scroll, completes mid-scroll
+  // Crack: assembles during intro, disintegrates on scroll
   const crackProgress = Math.max(0, Math.min(1, (smoothScrollT - 0.02) / 0.60));
   if (crackSystem) {
-    crackSystem.visible = smoothScrollT > 0.02 && crackProgress < 1.0;
-    crackSystem.material.uniforms.uCrackProgress.value = crackProgress;
+    if (isIntroPhase) {
+      crackSystem.visible = introCrackProgress > 0.01;
+      crackSystem.material.uniforms.uCrackProgress.value = introCrackProgress;
+    } else {
+      crackSystem.visible = smoothScrollT > 0.02 && crackProgress < 1.0;
+      crackSystem.material.uniforms.uCrackProgress.value = crackProgress;
+    }
     crackSystem.material.uniforms.uTime.value = t;
   }
   mat.uniforms.uMouse.value.copy(mouse3D);
