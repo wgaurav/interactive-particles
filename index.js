@@ -1778,12 +1778,12 @@ function animate() {
 
   // Logo fades in with bar intro; as soon as scroll starts it cross-fades to crack
   const logoFadeIn  = Math.min(1, introT * 3);
-  const logoFadeOut = 1 - Math.max(0, Math.min(1, (smoothScrollT - 0.02) / 0.06));
+  const logoFadeOut = 1 - Math.max(0, Math.min(1, (smoothScrollT - 0.02) / 0.18));
   logoMat.uniforms.uOpacity.value = logoFadeIn * logoFadeOut;
   logoMesh.visible = logoMat.uniforms.uOpacity.value > 0.001;
 
-  // Crack disintegration: starts on first scroll, completes just after zoom-in finishes
-  const crackProgress = Math.max(0, Math.min(1, (smoothScrollT - 0.02) / 0.33));
+  // Crack disintegration: starts on first scroll, completes mid-scroll
+  const crackProgress = Math.max(0, Math.min(1, (smoothScrollT - 0.02) / 0.60));
   if (crackSystem) {
     crackSystem.visible = smoothScrollT > 0.02 && crackProgress < 1.0;
     crackSystem.material.uniforms.uCrackProgress.value = crackProgress;
