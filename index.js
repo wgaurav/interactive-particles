@@ -1147,7 +1147,7 @@ const logoFragShader = `
     float totalShine = (ringSharp + ringGlow + edgeWaveIntensity + sparkleGlint + centerFlash2) * logoActivation + edgeShimmer;
     vec3 shineColor = mix(vec3(0.95, 0.82, 0.45), vec3(1.0, 0.97, 0.90), smoothstep(0.3, 0.9, totalShine));
 
-    vec3 finalCol = baseCol + shineColor * totalShine;
+    vec3 finalCol = baseCol + shineColor * totalShine * 0.55;
     gl_FragColor = vec4(clamp(finalCol, 0.0, 1.0), texel.a * 0.95 * uOpacity);
   }
 `;
