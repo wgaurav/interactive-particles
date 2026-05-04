@@ -1836,7 +1836,7 @@ function animate() {
     crackSystem.material.uniforms.uTime.value = t;
   }
   mat.uniforms.uMouse.value.copy(mouse3D);
-  mat.uniforms.uMouseActive.value = mouseActive ? 1 : 0;
+  mat.uniforms.uMouseActive.value = mouseOnBar ? 1 : 0;
 
   // Camera scroll animation — lerp toward keyframe target each frame
   const camState = getCamState(smoothScrollT);
