@@ -1404,10 +1404,11 @@ function buildCrackParticles(img) {
     varying vec3 vColor;
     varying float vAlpha;
     varying float vDecay;
+    uniform float uCrackFade;
     void main() {
       if (length(gl_PointCoord - vec2(0.5)) > 0.5) discard;
       vec3 col = mix(vColor * 0.85, vColor * 0.2, smoothstep(0.0, 0.6, vDecay));
-      float a = vAlpha * 0.70;
+      float a = vAlpha * 0.70 * uCrackFade;
       if (a < 0.005) discard;
       gl_FragColor = vec4(col, a);
     }
@@ -1415,7 +1416,7 @@ function buildCrackParticles(img) {
 
   const crackMat = new THREE.ShaderMaterial({
     vertexShader: crackVert, fragmentShader: crackFrag,
-    uniforms: { uCrackProgress: { value: 0 }, uTime: { value: 0 } },
+    uniforms: { uCrackProgress: { value: 0 }, uTime: { value: 0 }, uCrackFade: { value: 1 } },
     transparent: true, depthTest: false, depthWrite: false,
     blending: THREE.NormalBlending, vertexColors: true
   });
@@ -1781,21 +1782,24 @@ function animate() {
   // ease the assembly so it feels organic (matches bar particle ease-out)
   const introEased = introT * introT * (3.0 - 2.0 * introT);
   const introCrackProgress = 1.0 - introEased;
-  // Logo texture appears only in the final stretch of intro (80–100%) to crossfade over assembled particles
-  const logoFadeIn  = Math.max(0, Math.min(1, (introT - 0.80) / 0.20));
+  // Crossfade window: crack fades OUT while logo fades IN over the same range (70–100% of intro)
+  const crossfade   = Math.max(0, Math.min(1, (introT - 0.70) / 0.30));
+  const logoFadeIn  = crossfade;
   const logoFadeOut = 1 - Math.max(0, Math.min(1, (smoothScrollT - 0.02) / 0.18));
   logoMat.uniforms.uOpacity.value = logoFadeIn * logoFadeOut;
   logoMesh.visible = logoMat.uniforms.uOpacity.value > 0.001;
 
-  // Crack: assembles during intro, disintegrates on scroll
+  // Crack: assembles during intro (fading out as logo fades in), disintegrates on scroll
   const crackProgress = Math.max(0, Math.min(1, (smoothScrollT - 0.02) / 0.60));
   if (crackSystem) {
     if (isIntroPhase) {
-      crackSystem.visible = introCrackProgress > 0.01;
+      crackSystem.visible = true;
       crackSystem.material.uniforms.uCrackProgress.value = introCrackProgress;
+      crackSystem.material.uniforms.uCrackFade.value = 1.0 - crossfade;
     } else {
       crackSystem.visible = smoothScrollT > 0.02 && crackProgress < 1.0;
       crackSystem.material.uniforms.uCrackProgress.value = crackProgress;
+      crackSystem.material.uniforms.uCrackFade.value = 1.0;
     }
     crackSystem.material.uniforms.uTime.value = t;
   }
