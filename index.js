@@ -622,7 +622,7 @@ const vertexShader = `
     // Size: variety and fade grow continuously with spread
     float starSz = 0.6 + aSeed * 1.4;
     float netSizeMult = mix(1.0, starSz * netAlpha, spreadT);
-    gl_PointSize = 2.0 * uPixelRatio * sizeMult * netSizeMult;
+    gl_PointSize = 2.6 * uPixelRatio * sizeMult * netSizeMult;
 
     gl_Position = projectionMatrix * mv;
     vLogoParticle = 0.0;
@@ -804,6 +804,17 @@ const fragmentShader = `
     float brightWave = waveCombined * 0.42;
     float darkEdge = exp(-waveCombined * waveCombined * 0.5) * 0.10;
 
+    // Slowly rotating spatial gradient — broad cohesive sheen across all particles
+    float gradAngle  = t * 0.04;
+    float gradAngle2 = t * 0.025 + 1.5;
+    float gradDir    = wp.x * cos(gradAngle) + wp.z * sin(gradAngle) * 1.5 + wp.y * 0.6;
+    float gradNorm   = clamp(gradDir / 3.2 + 0.5, 0.0, 1.0);
+    float gradCurve  = gradNorm * gradNorm * (3.0 - 2.0 * gradNorm);
+    float gradDir2   = wp.x * sin(gradAngle2) - wp.z * cos(gradAngle2) + wp.y * 0.8;
+    float gradNorm2  = clamp(gradDir2 / 3.0 + 0.5, 0.0, 1.0);
+    float gradCurve2 = gradNorm2 * gradNorm2 * (3.0 - 2.0 * gradNorm2);
+    float spatialGradient = mix(0.06, 0.28, gradCurve) + gradCurve2 * 0.09;
+
     // Slow rolling reflection bands — simulate overhead light sweeping across the bar
     float roll1 = exp(-pow(wp.x - sin(t * 0.06) * 1.3, 2.0) * 2.2) * 0.72;
     float roll2 = exp(-pow(wp.z - cos(t * 0.04) * 0.38, 2.0) * 4.5) * 0.45;
@@ -870,7 +881,7 @@ const fragmentShader = `
     float dynLight = dynDiff * 0.55 + dynSpec * 0.35;
     // ── end dynamic light ───────────────────────────────────────────────────
 
-    float metalGradient = clamp(0.46 + ambientGrad * 0.22 + brightWave - darkEdge + surfaceNoise + darkShine + brushedEffect + sunTotal + brightBoost + glint + rolling + dynLight + sweepNet + vLogoEdge * 0.18, 0.0, 1.0);
+    float metalGradient = clamp(0.46 + ambientGrad * 0.22 + brightWave - darkEdge + surfaceNoise + darkShine + brushedEffect + sunTotal + brightBoost + glint + rolling + dynLight + sweepNet + spatialGradient + vLogoEdge * 0.18, 0.0, 1.0);
 
     vec3 col = mix(deepShadow, darkGold,   smoothstep(0.00, 0.10, metalGradient));
     col = mix(col, shadowGold,             smoothstep(0.08, 0.20, metalGradient));
@@ -995,6 +1006,21 @@ const fragmentShader = `
     col = mix(col, intCol, clamp(intTotal * 0.88 * intSelectivity, 0.0, 0.92));
     col = mix(col, pureWhite, vBright * intGlowSharp * 0.52);
     // ── end internal light ─────────────────────────────────────────────────
+
+    // Ocean shadow waves — chaotic multi-directional interference (OMMA-style)
+    float ow1 = sin((wp.y * 1.2 + wp.x * 0.3) * 6.5 + t * 4.125);
+    float ow2 = sin((wp.z * 1.3 + wp.x * -0.4) * 7.0 + t * 4.5);
+    float ow3 = sin((wp.x * 0.7 + wp.y * 0.9 + wp.z * 0.5) * 6.8 - t * 3.75);
+    float ow4 = snoise(vec3(wp.x * 3.2 - t * 0.9, wp.z * 3.2 + t * 1.2, wp.y * 2.5 + t * 0.675));
+    float ow5 = snoise(vec3(wp.y * 3.5 + t * 1.05, wp.x * 2.3 - t * 0.75, wp.z * 2.8 - t * 0.525));
+    float oceanMix    = (ow1 * 1.0 + ow2 * 0.9 + ow3 * 0.8 + ow4 * 1.3 + ow5 * 1.0) / 3.5;
+    float oceanBiased = pow(clamp(oceanMix * 0.5 + 0.5, 0.0, 1.0), 0.52);
+    float oceanShadow = clamp(mix(0.55, 1.15, oceanBiased), 0.55, 1.15);
+    float shadowDepth = smoothstep(0.70, 0.30, oceanShadow);
+    float finalOcean  = oceanShadow * (1.0 - shadowDepth * (0.20 + 0.06 * sin(t * 0.1)));
+    float shadowContrast = mix(0.88, 1.0, smoothstep(0.40, 0.85, finalOcean));
+    col *= mix(1.0, finalOcean * shadowContrast, 0.60);
+    col = max(col, deepShadow * 0.85);
 
     // Per-dot sphere shading — warm highlight at center, dims toward edge
     float dotLift = max(0.40 - d, 0.0) * 2.80;
