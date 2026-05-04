@@ -1148,9 +1148,8 @@ const logoFragShader = `
     float totalShine = (ringSharp + ringGlow + edgeWaveIntensity + sparkleGlint + centerFlash2) * logoActivation + edgeShimmer;
     vec3 shineColor = mix(vec3(0.95, 0.82, 0.45), vec3(1.0, 0.97, 0.90), smoothstep(0.3, 0.9, totalShine));
 
-    vec3 warmGoldBoost = vec3(0.85, 0.68, 0.28);
     vec3 finalCol = baseCol + shineColor * totalShine * 0.55;
-    finalCol = mix(finalCol, finalCol * 1.6 + warmGoldBoost * 0.35, uIntroGlow);
+    finalCol = mix(finalCol, finalCol * 1.12 + vec3(0.06, 0.04, 0.01), uIntroGlow);
     gl_FragColor = vec4(clamp(finalCol, 0.0, 1.0), texel.a * 0.95 * uOpacity);
   }
 `;
@@ -1785,16 +1784,16 @@ function animate() {
   const isIntroPhase = introT < 1.0;
   const introEased = introT * introT * (3.0 - 2.0 * introT);
   const introCrackProgress = 1.0 - introEased;
-  // Long crossfade: crack fades out, logo fades in, over 40–100% of intro
-  const crossfade  = Math.max(0, Math.min(1, (introT - 0.40) / 0.60));
+  // Crossfade: crack fades out, logo fades in, over 65–100% of intro (particles nearly assembled before logo appears)
+  const crossfade  = Math.max(0, Math.min(1, (introT - 0.65) / 0.35));
   const logoFadeIn = crossfade;
   const logoFadeOut = 1 - Math.max(0, Math.min(1, (smoothScrollT - 0.02) / 0.18));
   logoMat.uniforms.uOpacity.value = logoFadeIn * logoFadeOut;
   logoMesh.visible = logoMat.uniforms.uOpacity.value > 0.001;
-  // Intro glow: logo starts warm/bright (matching crack particles), settles over 3s after intro
+  // Subtle warm boost on logo while it first appears, fades to 0 over 2s after intro
   const postIntroT = Math.max(0, t - 2.8);
-  const introGlow  = isIntroPhase ? 1.0 : Math.max(0, 1.0 - postIntroT / 3.0);
-  logoMat.uniforms.uIntroGlow.value = introGlow * crossfade;
+  const introGlow  = isIntroPhase ? crossfade : Math.max(0, 1.0 - postIntroT / 2.0);
+  logoMat.uniforms.uIntroGlow.value = introGlow;
 
   // Crack: assembles during intro (fading out as logo fades in), disintegrates on scroll
   const crackProgress = Math.max(0, Math.min(1, (smoothScrollT - 0.02) / 0.60));
