@@ -593,7 +593,7 @@ const vertexShader = `
 
     float mouseDist = length(p - uMouse);
     float sizeInfluence = 1.0 - smoothstep(0.0, 0.55, mouseDist);
-    float sizeMult = (1.0 + sizeInfluence * 1.5 * uMouseActive) * scrollSizeMod;
+    float sizeMult = scrollSizeMod;
 
     vec3 lightDir1 = normalize(vec3(
       sin(uTime * 0.15) * 0.6, 0.8, cos(uTime * 0.2) * 0.5 + 0.3
@@ -775,10 +775,9 @@ const fragmentShader = `
     vec3 sun1 = normalize(vec3(sin(t * 0.06) * 0.5 + 0.2, 0.85, cos(t * 0.07) * 0.4 + 0.15));
     vec3 half1 = normalize(sun1 + viewDir);
     float sp1 = pow(max(dot(N, half1), 0.0), 140.0);
-    float sp1micro = pow(max(dot(N, half1), 0.0), 800.0);
     float sp1broad = pow(max(dot(N, half1), 0.0), 18.0);
     float fres1 = pow(1.0 - max(dot(N, viewDir), 0.0), 3.0);
-    float sunSpec1 = sp1 * 0.90 + sp1broad * 0.38 + fres1 * sp1 * 0.50 + sp1micro * 1.80;
+    float sunSpec1 = sp1 * 0.60 + sp1broad * 0.30 + fres1 * sp1 * 0.30;
 
     vec3 sun2 = normalize(vec3(-0.3 + sin(t * 0.045 + 2.5) * 0.3, 0.75, -0.25 + cos(t * 0.055 + 1.8) * 0.25));
     vec3 half2 = normalize(sun2 + viewDir);
@@ -975,9 +974,7 @@ const fragmentShader = `
     col *= mix(1.0, finalOcean * shadowContrast, 0.82);
     col = max(col, deepShadow * 0.85);
 
-    // Mouse proximity flare — bright warm-white bloom on nearby particles
-    col = mix(col, pureWhite, mouseBright * 0.75);
-    col = mix(col, whiteShine, mouseBright * 0.50);
+    // Morpho hover: purely physical repel — no color change on the particles
 
     col = max(col, deepShadow * 0.90);
     col = clamp(col, 0.0, 1.0);
@@ -1018,9 +1015,8 @@ const fragmentShader = `
 
     // Selective: bright particles (gaps) flare strongly; dark ones absorb
     float intSelectivity = vBright * 1.0 + (1.0 - vBright) * 0.28;
-    vec3 intCol = mix(vec3(0.95, 0.84, 0.42), vec3(1.0, 0.97, 0.82), intGlowSharp);
-    col = mix(col, intCol, clamp(intTotal * 0.88 * intSelectivity, 0.0, 0.92));
-    col = mix(col, pureWhite, vBright * intGlowSharp * 0.52);
+    vec3 intCol = mix(vec3(0.95, 0.84, 0.42), vec3(0.98, 0.88, 0.55), intGlowSharp);
+    col = mix(col, intCol, clamp(intTotal * 0.55 * intSelectivity, 0.0, 0.70));
     // ── end internal light ─────────────────────────────────────────────────
 
     // Per-dot sphere shading — warm highlight at center, dims toward edge
@@ -1737,10 +1733,10 @@ function animate() {
   const dt = Math.min(t - lastTime, 0.033);
   lastTime = t;
 
-  const influenceRadius = 0.62;
-  const springK         = 0.7;
-  const damping         = 1.2;
-  const maxDisp         = 0.15;
+  const influenceRadius = 0.45;
+  const springK         = 5.0;
+  const damping         = 4.0;
+  const maxDisp         = 0.10;
 
   if (!isMobile) for (let i = 0; i < PARTICLE_COUNT; i++) {
     const i3 = i * 3;
@@ -1754,17 +1750,12 @@ function animate() {
       const toMouseZ = mouseLocal.z - (oz + dz);
       const dist = Math.sqrt(toMouseX*toMouseX + toMouseY*toMouseY + toMouseZ*toMouseZ);
       if (dist < influenceRadius && dist > 0.001) {
+        // Morpho-style: radial repel outward from cursor — creates a smooth void
         const falloff = Math.pow(1.0 - dist / influenceRadius, 2);
-        const velMag = Math.sqrt(mouseVelX * mouseVelX + mouseVelZ * mouseVelZ);
-        if (velMag > 0.05) {
-          const nx = norms[i3], ny = norms[i3+1], nz = norms[i3+2];
-          const vx = mouseVelX / velMag, vz = mouseVelZ / velMag;
-          let kx = vx, ky = 0, kz = vz;
-          const kDotN = kx*nx + ky*ny + kz*nz;
-          kx -= kDotN * nx; ky -= kDotN * ny; kz -= kDotN * nz;
-          const velScale = Math.min(velMag / 3.5, 1.0) * 3.0 * falloff;
-          fx += kx * velScale; fy += ky * velScale; fz += kz * velScale;
-        }
+        const invDist = 1.0 / dist;
+        fx -= toMouseX * invDist * 4.5 * falloff;
+        fy -= toMouseY * invDist * 4.5 * falloff;
+        fz -= toMouseZ * invDist * 4.5 * falloff;
       }
     }
 
