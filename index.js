@@ -1406,8 +1406,8 @@ function buildCrackParticles(img) {
     varying float vDecay;
     void main() {
       if (length(gl_PointCoord - vec2(0.5)) > 0.5) discard;
-      vec3 col = mix(vColor * 0.6, vColor * 0.2, smoothstep(0.0, 0.6, vDecay));
-      float a = vAlpha * 0.45;
+      vec3 col = mix(vColor * 0.85, vColor * 0.2, smoothstep(0.0, 0.6, vDecay));
+      float a = vAlpha * 0.70;
       if (a < 0.005) discard;
       gl_FragColor = vec4(col, a);
     }
