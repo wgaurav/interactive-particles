@@ -72,13 +72,13 @@ const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
 const bloomPass = new UnrealBloomPass(
   new THREE.Vector2(window.innerWidth, window.innerHeight),
-  0.38,   // strength
-  0.20,   // tight radius — prevents adjacent particles bleeding into each other
-  0.74    // threshold
+  0.18,   // very subtle — OMMA achieves its look via shader, not bloom
+  0.06,   // tight: only the very brightest pixel gets a tiny halo, no bleed
+  0.82    // high threshold so only peak-white particles bloom at all
 );
 composer.addPass(bloomPass);
 composer.addPass(new OutputPass());
-if (isMobile) { bloomPass.strength = 0.16; bloomPass.radius = 0.12; }
+if (isMobile) { bloomPass.strength = 0.10; bloomPass.radius = 0.04; }
 
 // ── Mouse tracking ──
 const mouse3D = new THREE.Vector3(9999, 9999, 0);
@@ -757,10 +757,10 @@ const fragmentShader = `
     float darkShimmer = snoise(vec3(wp.x * 5.0 + t * 0.03, wp.z * 5.0 + t * 0.02, wp.y * 4.0 + t * 0.025));
     float darkShine = smoothstep(0.2, 0.7, darkShimmer) * 0.06;
 
-    float brightPulse = 0.5 + 0.5 * sin(t * 0.4 + vSeed * 40.0);
-    float brightBoost = vBright * mix(0.28, 0.58, brightPulse) + (1.0 - vBright) * 0.12;
-    float glintPhase = sin(t * 1.1 + vSeed * 100.0) * sin(t * 0.7 + vSeed * 67.0);
-    float glint = vBright * smoothstep(0.78, 1.0, glintPhase) * 0.80;
+    float brightPulse = 0.5 + 0.5 * sin(t * 1.2 + vSeed * 40.0);
+    float brightBoost = vBright * mix(0.15, 0.30, brightPulse) + (1.0 - vBright) * 0.06;
+    float glintPhase = sin(t * 3.5 + vSeed * 100.0) * sin(t * 2.1 + vSeed * 67.0);
+    float glint = vBright * smoothstep(0.85, 1.0, glintPhase) * 0.25;
 
     // Mouse proximity flare — particles near cursor flash bright gold/white
     float mouseRandSeed = fract(sin(vSeed * 127.1 + 311.7) * 43758.5453);
@@ -968,11 +968,11 @@ const fragmentShader = `
     float ow5 = snoise(vec3(wp.y * 3.5 + t * 1.05, wp.x * 2.3 - t * 0.75, wp.z * 2.8 - t * 0.525));
     float oceanMix    = (ow1 * 1.0 + ow2 * 0.9 + ow3 * 0.8 + ow4 * 1.3 + ow5 * 1.0) / 3.5;
     float oceanBiased = pow(clamp(oceanMix * 0.5 + 0.5, 0.0, 1.0), 0.52);
-    float oceanShadow = clamp(mix(0.55, 1.15, oceanBiased), 0.55, 1.15);
+    float oceanShadow = clamp(mix(0.38, 1.20, oceanBiased), 0.38, 1.20);
     float shadowDepth = smoothstep(0.70, 0.30, oceanShadow);
-    float finalOcean  = oceanShadow * (1.0 - shadowDepth * (0.20 + 0.06 * sin(t * 0.1)));
-    float shadowContrast = mix(0.88, 1.0, smoothstep(0.40, 0.85, finalOcean));
-    col *= mix(1.0, finalOcean * shadowContrast, 0.40);
+    float finalOcean  = oceanShadow * (1.0 - shadowDepth * (0.28 + 0.10 * sin(t * 0.1)));
+    float shadowContrast = mix(0.82, 1.0, smoothstep(0.30, 0.75, finalOcean));
+    col *= mix(1.0, finalOcean * shadowContrast, 0.70);
     col = max(col, deepShadow * 0.85);
 
     // Mouse proximity flare — bright warm-white bloom on nearby particles
