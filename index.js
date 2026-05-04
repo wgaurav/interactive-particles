@@ -1175,8 +1175,8 @@ const logoFragShader = `
     float totalShine = (ringSharp + ringGlow + edgeWaveIntensity + sparkleGlint + centerFlash2) * logoActivation + edgeShimmer;
     vec3 shineColor = mix(vec3(0.95, 0.82, 0.45), vec3(1.0, 0.97, 0.90), smoothstep(0.3, 0.9, totalShine));
 
-    vec3 finalCol = baseCol + shineColor * totalShine * 0.55;
-    finalCol = mix(finalCol, finalCol * 1.12 + vec3(0.06, 0.04, 0.01), uIntroGlow);
+    vec3 finalCol = baseCol + shineColor * totalShine * 0.80;
+    finalCol = mix(finalCol, finalCol * 1.55 + vec3(0.22, 0.15, 0.03), uIntroGlow);
     gl_FragColor = vec4(clamp(finalCol, 0.0, 1.0), texel.a * 0.95 * uOpacity);
   }
 `;
@@ -1427,7 +1427,7 @@ function buildCrackParticles(img) {
       }
       vAlpha = 1.0 - smoothstep(0.2, 0.85, eased);
       gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
-      gl_PointSize = 1.5;
+      gl_PointSize = 2.2;
     }
   `;
   const crackFrag = `
@@ -1437,8 +1437,8 @@ function buildCrackParticles(img) {
     uniform float uCrackFade;
     void main() {
       if (length(gl_PointCoord - vec2(0.5)) > 0.5) discard;
-      vec3 col = mix(vColor * 0.85, vColor * 0.2, smoothstep(0.0, 0.6, vDecay));
-      float a = vAlpha * 0.70 * uCrackFade;
+      vec3 col = mix(vColor * 1.1, vColor * 0.2, smoothstep(0.0, 0.6, vDecay));
+      float a = vAlpha * 0.88 * uCrackFade;
       if (a < 0.005) discard;
       gl_FragColor = vec4(col, a);
     }
