@@ -622,7 +622,7 @@ const vertexShader = `
     // Size: variety and fade grow continuously with spread
     float starSz = 0.6 + aSeed * 1.4;
     float netSizeMult = mix(1.0, starSz * netAlpha, spreadT);
-    gl_PointSize = 1.25 * uPixelRatio * sizeMult * netSizeMult;
+    gl_PointSize = 2.0 * uPixelRatio * sizeMult * netSizeMult;
 
     gl_Position = projectionMatrix * mv;
     vLogoParticle = 0.0;
