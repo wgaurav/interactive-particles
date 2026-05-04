@@ -146,7 +146,7 @@ const faceData = faces.map(f => {
   return { ...f, area };
 });
 
-const BASE_PARTICLE_COUNT = isMobile ? 7000 : 15000;
+const BASE_PARTICLE_COUNT = isMobile ? 5000 : 15000;
 
 const edges = [
   [corners.b0, corners.b1], [corners.b1, corners.b2],
@@ -442,6 +442,7 @@ const vertexShader = `
   uniform vec3 uMouse;
   uniform float uMouseActive;
   uniform float uPixelRatio;
+  uniform float uPointBase;
   uniform float uIntroExpand;
   uniform float uIntroScatter;
 
@@ -622,7 +623,7 @@ const vertexShader = `
     // Size: variety and fade grow continuously with spread
     float starSz = 0.6 + aSeed * 1.4;
     float netSizeMult = mix(1.0, starSz * netAlpha, spreadT);
-    gl_PointSize = 3.2 * uPixelRatio * sizeMult * netSizeMult;
+    gl_PointSize = uPointBase * uPixelRatio * sizeMult * netSizeMult;
 
     gl_Position = projectionMatrix * mv;
     vLogoParticle = 0.0;
@@ -1054,6 +1055,7 @@ const mat = new THREE.ShaderMaterial({
     uMouseActive: { value: 0 },
     uMouseScreen: { value: new THREE.Vector2(0, 0) },
     uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) },
+    uPointBase:  { value: isMobile ? 2.0 : 3.2 },
     uIntroT: { value: 0 },
     uScrollT: { value: 0 },
     uIntroExpand:  { value: isMobile ? 1.0 : 4.2 },
@@ -1193,7 +1195,7 @@ const logoMat = new THREE.ShaderMaterial({
   blending: THREE.NormalBlending
 });
 
-const logoSize = 0.28;
+const logoSize = isMobile ? 0.40 : 0.28;
 const logoPlane = new THREE.PlaneGeometry(logoSize, logoSize);
 const logoMesh = new THREE.Mesh(logoPlane, logoMat);
 logoMesh.name = 'barLogo';
