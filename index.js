@@ -593,7 +593,7 @@ const vertexShader = `
 
     float mouseDist = length(p - uMouse);
     float sizeInfluence = 1.0 - smoothstep(0.0, 0.55, mouseDist);
-    float sizeMult = (1.0 + sizeInfluence * 0.35 * uMouseActive) * scrollSizeMod;
+    float sizeMult = (1.0 + sizeInfluence * 0.80 * uMouseActive) * scrollSizeMod;
 
     vec3 lightDir1 = normalize(vec3(
       sin(uTime * 0.15) * 0.6, 0.8, cos(uTime * 0.2) * 0.5 + 0.3
@@ -975,9 +975,10 @@ const fragmentShader = `
     col *= mix(1.0, finalOcean * shadowContrast, 0.82);
     col = max(col, deepShadow * 0.85);
 
-    // Mouse proximity — warm gold brightening, no white flare
-    col = mix(col, brightGold, mouseBright * 0.70);
-    col = mix(col, warmGold,   mouseBright * mouseBright * 0.50);
+    // Mouse proximity — warm gold brightening with a crisp highlight at the core
+    col = mix(col, warmGold,   mouseBright * 0.65);
+    col = mix(col, brightGold, mouseBright * mouseBright * 0.70);
+    col = mix(col, whiteShine, pow(mouseBright, 3.0) * 0.60);
 
     col = max(col, deepShadow * 0.90);
     col = clamp(col, 0.0, 1.0);
@@ -1737,10 +1738,10 @@ function animate() {
   const dt = Math.min(t - lastTime, 0.033);
   lastTime = t;
 
-  const influenceRadius = 0.62;
-  const springK         = 0.7;
-  const damping         = 1.2;
-  const maxDisp         = 0.15;
+  const influenceRadius = 0.50;
+  const springK         = 4.0;
+  const damping         = 3.5;
+  const maxDisp         = 0.06;
 
   if (!isMobile) for (let i = 0; i < PARTICLE_COUNT; i++) {
     const i3 = i * 3;
@@ -1748,7 +1749,25 @@ function animate() {
     const dx = displacement[i3], dy = displacement[i3+1], dz = displacement[i3+2];
     let fx = 0, fy = 0, fz = 0;
 
-    // No physical displacement — hover is purely visual (color/light in the shader)
+    if (mouseOnBar) {
+      const toMouseX = mouseLocal.x - (ox + dx);
+      const toMouseY = mouseLocal.y - (oy + dy);
+      const toMouseZ = mouseLocal.z - (oz + dz);
+      const dist = Math.sqrt(toMouseX*toMouseX + toMouseY*toMouseY + toMouseZ*toMouseZ);
+      if (dist < influenceRadius && dist > 0.001) {
+        const falloff = Math.pow(1.0 - dist / influenceRadius, 2);
+        const velMag = Math.sqrt(mouseVelX * mouseVelX + mouseVelZ * mouseVelZ);
+        if (velMag > 0.05) {
+          const nx = norms[i3], ny = norms[i3+1], nz = norms[i3+2];
+          const vx = mouseVelX / velMag, vz = mouseVelZ / velMag;
+          let kx = vx, ky = 0, kz = vz;
+          const kDotN = kx*nx + ky*ny + kz*nz;
+          kx -= kDotN * nx; ky -= kDotN * ny; kz -= kDotN * nz;
+          const velScale = Math.min(velMag / 3.5, 1.0) * 1.2 * falloff;
+          fx += kx * velScale; fy += ky * velScale; fz += kz * velScale;
+        }
+      }
+    }
 
     fx -= springK * dx; fy -= springK * dy; fz -= springK * dz;
     fx -= damping * velocity[i3]; fy -= damping * velocity[i3+1]; fz -= damping * velocity[i3+2];
