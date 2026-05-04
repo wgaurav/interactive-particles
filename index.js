@@ -1053,7 +1053,7 @@ points.scale.set(1.069, 1.069, 1.045);
 barGroup.add(points);
 
 // ── Logo ──
-const logoTexture = new THREE.TextureLoader().load('assets/logo darkpalm.png');
+const logoTexture = new THREE.TextureLoader().load('assets/logo.png');
 logoTexture.colorSpace = THREE.SRGBColorSpace;
 
 const logoVertShader = `
@@ -1072,8 +1072,7 @@ const logoVertShader = `
 const logoFragShader = `
   uniform sampler2D uLogoMap;
   uniform float uTime;
-  uniform float uReveal;
-  uniform float uScrollT;
+  uniform float uOpacity;
   varying vec2 vUv;
   varying vec3 vWorldPos;
   varying vec3 vNormal;
@@ -1091,95 +1090,37 @@ const logoFragShader = `
     vec4 texel = texture2D(uLogoMap, vUv);
     if (texel.a < 0.01) discard;
 
-    // ── Particle-scatter reveal ──────────────────────────────────────────────
-    // 28×28 jittered Voronoi grid.  Each cell owns one "virtual particle" at a
-    // fully-random position (full jitter), so dots never align to a grid.
-    // 3×3 neighbourhood check keeps dots visible across cell boundaries.
-    // uReveal == introT, so logo particles land in exact lock-step with the bar.
-    // Fewer, larger cells so each dot is clearly visible during formation
-    float res = 20.0;
-    vec2 uv  = vUv * res;
-    vec2 iuv = floor(uv);
-    vec2 fuv = fract(uv);
-
-    float dotMask  = 0.0;
-    float flashAcc = 0.0;
-    float bestSeed2 = 0.5;
-
-    // dissT: linear 1:1 with scroll — each wheel tick visibly advances the effect
-    float dissT = min(uScrollT / 0.28, 1.0);
-
-    // Solid fill: intro assembles it (0→1), dissolve breaks it apart (1→0)
-    float introSolid    = smoothstep(0.86, 1.0, uReveal);
-    float dissolveSolid = 1.0 - smoothstep(0.0, 0.28, dissT);
-    float solidFill     = min(introSolid, dissolveSolid);
-    float growPhase     = 1.0 - solidFill;
-
-    for (int dy = -1; dy <= 1; dy++) {
-      for (int dx = -1; dx <= 1; dx++) {
-        vec2 nc = iuv + vec2(float(dx), float(dy));
-
-        float jx    = hash(nc + vec2(0.31, 0.71));
-        float jy    = hash(nc + vec2(0.93, 0.17));
-        float seed  = hash(nc + vec2(0.55, 0.43));
-        float seed2 = hash(nc + vec2(47.3, 91.1));
-
-        // Arrival (intro)
-        float sinceArrival = uReveal - seed;
-        float arrived = smoothstep(0.0, 0.05, sinceArrival);
-
-        // Departure: center particles leave first, ripple expands outward
-        vec2 cellVec = (nc + vec2(jx, jy)) / res - vec2(0.5);
-        float cellDist = length(cellVec) * 1.42; // 0=center, 1=corner
-        float sinceDeparture = (dissT - 0.18) - cellDist * 0.75;
-        float departureAlpha = 1.0 - smoothstep(0.0, 0.06, sinceDeparture);
-
-        // Scatter: particles fly outward from logo center
-        vec2 scatterDir = normalize(cellVec + vec2(0.001, -0.001));
-        vec2 scatterOff = scatterDir * smoothstep(0.0, 0.10, sinceDeparture) * 1.4;
-
-        vec2 toP = fuv - (vec2(float(dx), float(dy)) + vec2(jx, jy) + scatterOff);
-        float d  = length(toP);
-
-        float presentAlpha = arrived * departureAlpha;
-
-        float r    = (0.10 + seed2 * 0.04) * (1.0 + growPhase * 0.30);
-        float core = (1.0 - smoothstep(r - 0.02, r + 0.03, d)) * presentAlpha;
-        float halo = exp(-d * d * 22.0) * presentAlpha * 0.55;
-
-        float ft    = clamp(sinceArrival / 0.10, 0.0, 1.0);
-        float flash = exp(-ft * ft * 6.0) * arrived * (1.8 + seed2 * 0.8) * (1.0 - dissT);
-
-        float contrib = core + halo;
-        dotMask  = max(dotMask,  contrib);
-        flashAcc = max(flashAcc, flash * contrib);
-        if (contrib > 0.01) bestSeed2 = seed2;
-      }
-    }
-
-    float revealMask = mix(dotMask, 1.0, solidFill);
-    if (revealMask < 0.005) discard;
-    float brightFlash = flashAcc * (1.0 - solidFill);
-    // ── end reveal ──────────────────────────────────────────────────────────
-
     vec3 baseCol = texel.rgb;
 
-    // Periodic ring-shine after full assembly (unchanged)
     float barCycleDuration = 32.0;
     float barWaveTime = mod(uTime, barCycleDuration);
-    float logoActivation = smoothstep(8.0, 10.0, barWaveTime) * (1.0 - smoothstep(29.0, 32.0, barWaveTime));
+    float logoFadeIn  = smoothstep(8.0, 10.0, barWaveTime);
+    float logoFadeOut = 1.0 - smoothstep(29.0, 32.0, barWaveTime);
+    float logoActivation = logoFadeIn * logoFadeOut;
 
     vec2 centered = vUv - vec2(0.5);
     float distFromCenter = length(centered);
 
+    float sampleStep = 0.015;
+    float alphaSum = 0.0;
+    alphaSum += texture2D(uLogoMap, vUv + vec2( sampleStep,  0.0)).a;
+    alphaSum += texture2D(uLogoMap, vUv + vec2(-sampleStep,  0.0)).a;
+    alphaSum += texture2D(uLogoMap, vUv + vec2( 0.0,  sampleStep)).a;
+    alphaSum += texture2D(uLogoMap, vUv + vec2( 0.0, -sampleStep)).a;
+    alphaSum += texture2D(uLogoMap, vUv + vec2( sampleStep,  sampleStep)).a;
+    alphaSum += texture2D(uLogoMap, vUv + vec2(-sampleStep,  sampleStep)).a;
+    alphaSum += texture2D(uLogoMap, vUv + vec2( sampleStep, -sampleStep)).a;
+    alphaSum += texture2D(uLogoMap, vUv + vec2(-sampleStep, -sampleStep)).a;
+
+    float logoPulseDuration = 7.0;
     float logoWindowTime = max(barWaveTime - 10.0, 0.0);
-    float pulseProgress  = mod(logoWindowTime, 7.0) / 7.0;
+    float pulseProgress  = mod(logoWindowTime, logoPulseDuration) / logoPulseDuration;
     float easedWave = pulseProgress * pulseProgress * (3.0 - 2.0 * pulseProgress);
 
     float ringPos  = mix(0.55, 0.0, easedWave);
     float ringDist = abs(distFromCenter - ringPos);
     float ringSharp = exp(-ringDist * ringDist * 600.0) * 1.2;
-    float ringGlow  = exp(-ringDist * ringDist * 80.0) * 0.55;
+    float ringGlow  = exp(-ringDist * ringDist *  80.0) * 0.55;
 
     float sStep2 = mix(0.04, 0.005, easedWave);
     float a2 = (
@@ -1206,16 +1147,8 @@ const logoFragShader = `
     float totalShine = (ringSharp + ringGlow + edgeWaveIntensity + sparkleGlint + centerFlash2) * logoActivation + edgeShimmer;
     vec3 shineColor = mix(vec3(0.95, 0.82, 0.45), vec3(1.0, 0.97, 0.90), smoothstep(0.3, 0.9, totalShine));
 
-    // During particle phase: colour is bright silver-white (matching Morpho's look).
-    // As solidFill approaches 1 it blends into the real texture colour.
-    // Bright silver-white during formation, blends to real texture colour as it solidifies
-    vec3 particleCol = mix(vec3(0.88, 0.84, 0.72), vec3(1.0, 0.98, 0.92), bestSeed2);
-    vec3 finalBaseCol = mix(particleCol, baseCol, solidFill);
-
-    vec3 flashCol = mix(vec3(1.0, 0.92, 0.60), vec3(1.0, 0.98, 0.92), bestSeed2);
-    vec3 finalCol = finalBaseCol + shineColor * totalShine + flashCol * brightFlash;
-
-    gl_FragColor = vec4(clamp(finalCol, 0.0, 1.0), texel.a * 0.95 * revealMask);
+    vec3 finalCol = baseCol + shineColor * totalShine;
+    gl_FragColor = vec4(clamp(finalCol, 0.0, 1.0), texel.a * 0.95 * uOpacity);
   }
 `;
 
@@ -1225,8 +1158,7 @@ const logoMat = new THREE.ShaderMaterial({
   uniforms: {
     uLogoMap: { value: logoTexture },
     uTime: { value: 0 },
-    uReveal: { value: 0 },
-    uScrollT: { value: 0 }
+    uOpacity: { value: 0 }
   },
   transparent: true,
   depthTest: false,
@@ -1341,7 +1273,168 @@ maskImg.onload = function() {
   }
   mAttr.needsUpdate = true; eAttr.needsUpdate = true;
 };
-maskImg.src = 'assets/logo darkpalm.png';
+maskImg.src = 'assets/logo.png';
+
+// ── Crack particle system (OMMA logo animation) ──────────────────────────
+// Builds per-pixel particles from the logo image, assigns crack-propagation
+// timing to each, then crumbles them off the bar face on scroll.
+let crackSystem = null;
+
+function buildCrackParticles(img) {
+  const size = 256;
+  const canvas = document.createElement('canvas');
+  canvas.width = size; canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0, size, size);
+  const pixels = ctx.getImageData(0, 0, size, size).data;
+
+  // Generate 7 crack lines radiating from center with branching
+  const allCrackPts = [];
+  for (let c = 0; c < 7; c++) {
+    const baseAngle = (c / 7) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
+    let cx = 0.5, cy = 0.5;
+    const steps = 40 + Math.floor(Math.random() * 30);
+    for (let s = 0; s < steps; s++) {
+      const a = baseAngle + (Math.random() - 0.5) * 0.3;
+      const step = 0.008 + Math.random() * 0.008;
+      cx += Math.cos(a) * step; cy += Math.sin(a) * step;
+      if (cx < 0 || cx > 1 || cy < 0 || cy > 1) break;
+      allCrackPts.push({ x: cx, y: cy, order: s / steps });
+      if (Math.random() < 0.15) {
+        let bx = cx, by = cy;
+        const ba = a + (Math.random() > 0.5 ? 1 : -1) * (0.4 + Math.random() * 0.8);
+        const bs = 8 + Math.floor(Math.random() * 15);
+        for (let i = 0; i < bs; i++) {
+          bx += Math.cos(ba + (Math.random() - 0.5) * 0.4) * (0.006 + Math.random() * 0.006);
+          by += Math.sin(ba + (Math.random() - 0.5) * 0.4) * (0.006 + Math.random() * 0.006);
+          if (bx < 0 || bx > 1 || by < 0 || by > 1) break;
+          allCrackPts.push({ x: bx, y: by, order: (s + i / bs) / steps });
+        }
+      }
+    }
+  }
+
+  // Build spatial grid for fast crack-distance lookup
+  const gridRes = 32;
+  const grid = Array.from({ length: gridRes * gridRes }, () => []);
+  for (const pt of allCrackPts) {
+    const gx = Math.min(Math.floor(pt.x * gridRes), gridRes - 1);
+    const gy = Math.min(Math.floor(pt.y * gridRes), gridRes - 1);
+    grid[gy * gridRes + gx].push(pt);
+  }
+
+  // Assign crack-time to each pixel (how early that pixel starts decaying)
+  const crackTimeMap = new Float32Array(size * size).fill(1.0);
+  const crackWidth = 0.04;
+  for (let y = 0; y < size; y++) {
+    const uy = y / size;
+    const gy = Math.min(Math.floor(uy * gridRes), gridRes - 1);
+    for (let x = 0; x < size; x++) {
+      const ux = x / size;
+      const gx = Math.min(Math.floor(ux * gridRes), gridRes - 1);
+      let bestDist = 999, bestOrder = 1.0;
+      for (let dy = -2; dy <= 2; dy++) {
+        for (let dx = -2; dx <= 2; dx++) {
+          const nx = gx + dx, ny = gy + dy;
+          if (nx < 0 || nx >= gridRes || ny < 0 || ny >= gridRes) continue;
+          for (const pt of grid[ny * gridRes + nx]) {
+            const d = Math.hypot(ux - pt.x, uy - pt.y);
+            if (d < bestDist) { bestDist = d; bestOrder = pt.order; }
+          }
+        }
+      }
+      const prox = Math.max(0, 1 - bestDist / crackWidth);
+      crackTimeMap[y * size + x] = bestOrder * 0.6 + (1 - prox) * 0.4;
+    }
+  }
+
+  // Sample one particle per opaque pixel
+  const positions = [], colors = [], cSeeds = [], cTimes = [];
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const i = (y * size + x) * 4;
+      if (pixels[i + 3] / 255 < 0.15) continue;
+      const u = x / size, v = 1 - y / size;
+      positions.push((u - 0.5) * logoSize, (v - 0.5) * logoSize, 0);
+      colors.push(pixels[i] / 255, pixels[i + 1] / 255, pixels[i + 2] / 255);
+      cSeeds.push(Math.random());
+      cTimes.push(crackTimeMap[y * size + x]);
+    }
+  }
+
+  const crackGeo = new THREE.BufferGeometry();
+  crackGeo.setAttribute('position',   new THREE.Float32BufferAttribute(positions, 3));
+  crackGeo.setAttribute('color',      new THREE.Float32BufferAttribute(colors, 3));
+  crackGeo.setAttribute('aSeed',      new THREE.Float32BufferAttribute(cSeeds, 1));
+  crackGeo.setAttribute('aCrackTime', new THREE.Float32BufferAttribute(cTimes, 1));
+
+  const crackVert = `
+    attribute float aSeed;
+    attribute float aCrackTime;
+    varying vec3 vColor;
+    varying float vAlpha;
+    varying float vDecay;
+    uniform float uCrackProgress;
+    uniform float uTime;
+    void main() {
+      vColor = color;
+      vec3 pos = position;
+      float crackInfluence = mix(1.0, 0.15, uCrackProgress);
+      float decayStart = aCrackTime * 0.5 * crackInfluence;
+      float localDecay = clamp((uCrackProgress - decayStart) / (0.2 + aSeed * 0.1), 0.0, 1.0);
+      localDecay = max(localDecay, smoothstep(0.6, 1.0, uCrackProgress));
+      float eased = localDecay * localDecay;
+      vDecay = eased;
+      if (eased > 0.0) {
+        float angle = atan(position.y, position.x);
+        pos.x += cos(angle) * eased * (0.04 + aSeed * 0.08);
+        pos.y -= eased * eased * (0.15 + aSeed * 0.25);
+        pos.x += (aSeed - 0.5) * eased * 0.12;
+        pos.z += (aSeed - 0.5) * eased * 0.15;
+        float tf = 3.0 + aSeed * 5.0;
+        pos.x += sin(uTime * tf + aSeed * 40.0) * eased * 0.008;
+        pos.y += cos(uTime * tf * 0.8 + aSeed * 30.0) * eased * 0.008;
+      }
+      vAlpha = 1.0 - smoothstep(0.2, 0.85, eased);
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+      gl_PointSize = 1.5;
+    }
+  `;
+  const crackFrag = `
+    varying vec3 vColor;
+    varying float vAlpha;
+    varying float vDecay;
+    void main() {
+      if (length(gl_PointCoord - vec2(0.5)) > 0.5) discard;
+      vec3 col = mix(vColor, vColor * 0.2, smoothstep(0.0, 0.6, vDecay));
+      float a = vAlpha * 0.95;
+      if (a < 0.005) discard;
+      gl_FragColor = vec4(col, a);
+    }
+  `;
+
+  const crackMat = new THREE.ShaderMaterial({
+    vertexShader: crackVert, fragmentShader: crackFrag,
+    uniforms: { uCrackProgress: { value: 0 }, uTime: { value: 0 } },
+    transparent: true, depthTest: false, depthWrite: false,
+    blending: THREE.NormalBlending, vertexColors: true
+  });
+
+  crackSystem = new THREE.Points(crackGeo, crackMat);
+  crackSystem.position.copy(logoMesh.position);
+  crackSystem.rotation.copy(logoMesh.rotation);
+  crackSystem.renderOrder = 1000;
+  crackSystem.visible = false;
+  barGroup.add(crackSystem);
+}
+
+// Load logo image for crack particle building
+{
+  const crackImg = new Image();
+  crackImg.onload = () => buildCrackParticles(crackImg);
+  crackImg.src = 'assets/logo.png';
+}
+// ── end crack system ─────────────────────────────────────────────────────
 
 // ── Hit mesh ──
 const hitVerts = [
@@ -1682,15 +1775,20 @@ function animate() {
   // Smooth scroll interpolation
   smoothScrollT += (scrollT - smoothScrollT) * 0.06;
   mat.uniforms.uScrollT.value = smoothScrollT;
-  logoMat.uniforms.uScrollT.value = smoothScrollT;
 
-  // Logo particle-scatter reveal: starts at 40% of bar assembly (simultaneous),
-  // fully solid by 88% — matching Morpho's timing where logo forms mid-assembly.
-  // uReveal == introT: logo particles land frame-by-frame in lockstep with the bar.
-  // No delay, no offset — first particle dot appears on the very first frame.
-  const revealEased = introT * introT * (3 - 2 * introT); // smoothstep of introT
-  logoMat.uniforms.uReveal.value = revealEased;
-  logoMesh.scale.setScalar(0.92 + 0.08 * revealEased);
+  // Logo fades in with the bar intro, then cross-fades to crack particles on scroll
+  const logoFadeIn  = Math.min(1, introT * 3);
+  const logoFadeOut = 1 - Math.max(0, Math.min(1, (smoothScrollT - 0.47) / 0.05));
+  logoMat.uniforms.uOpacity.value = logoFadeIn * logoFadeOut;
+  logoMesh.visible = logoMat.uniforms.uOpacity.value > 0.001;
+
+  // Crack disintegration: triggers at scrollT 0.50, completes at 0.80
+  const crackProgress = Math.max(0, Math.min(1, (smoothScrollT - 0.50) / 0.30));
+  if (crackSystem) {
+    crackSystem.visible = smoothScrollT > 0.47 && crackProgress < 1.0;
+    crackSystem.material.uniforms.uCrackProgress.value = crackProgress;
+    crackSystem.material.uniforms.uTime.value = t;
+  }
   mat.uniforms.uMouse.value.copy(mouse3D);
   mat.uniforms.uMouseActive.value = mouseActive ? 1 : 0;
 
