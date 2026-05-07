@@ -8,7 +8,7 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 const isMobile = /Mobi|Android|iPhone|iPad|iPod|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x050505);
+// No scene.background — canvas is alpha:true so bg2gold.png shows through behind particles
 
 const _initAspect = window.innerWidth / window.innerHeight;
 const _initFOV = _initAspect < 1 ? Math.min(75, 40 / _initAspect) : 40;
@@ -16,7 +16,8 @@ const camera = new THREE.PerspectiveCamera(_initFOV, _initAspect, 0.1, 1000);
 camera.position.set(0, isMobile ? 1.2 : 1.8, isMobile ? 5.5 : 4.5);
 camera.lookAt(0, isMobile ? 0.0 : 0.15, 0);
 
-const renderer = new THREE.WebGLRenderer({ antialias: true });
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setClearColor(0x000000, 0); // fully transparent clear
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.outputColorSpace = THREE.LinearSRGBColorSpace; // OutputPass handles final sRGB
@@ -25,7 +26,7 @@ root.appendChild(renderer.domElement);
 
 // ── 2D Circle Rings Overlay ──
 const overlayCanvas = document.createElement('canvas');
-overlayCanvas.style.cssText = 'position:fixed;top:0;left:0;pointer-events:none;z-index:10;';
+overlayCanvas.style.cssText = 'position:fixed;top:0;left:0;pointer-events:none;z-index:15;';
 document.body.appendChild(overlayCanvas);
 const overlayCtx = overlayCanvas.getContext('2d');
 const overlayDpr = Math.min(window.devicePixelRatio, 2);
@@ -557,7 +558,7 @@ const vertexShader = `
     // ── Single continuous scroll spread — zero phase boundaries ──
     // spreadT starts at 0 (during zoom) and grows quadratically so the bar looks
     // intact while filling the screen, then opens up naturally afterward.
-    float spreadT = smoothstep(0.10, 1.00, uScrollT);
+    float spreadT = smoothstep(0.45, 1.00, uScrollT);
 
     float driftScale = 2.0 + aSeed * 1.2;
     float driftT = t * 0.10;
@@ -579,7 +580,7 @@ const vertexShader = `
 
     // Fade starts earlier and compresses into a shorter scroll window so
     // the mid-scroll cloud is noticeably thinner and the circle stage is sparse
-    float fadeT = max(0.0, (uScrollT - 0.08) / 0.52);
+    float fadeT = max(0.0, (uScrollT - 0.45) / 0.38);
     float survivorThreshold = 0.03;
     float netAlpha = 1.0;
     if (aSeed >= survivorThreshold) {
@@ -1577,21 +1578,28 @@ window.addEventListener('mousemove', (e) => {
 // ── Scroll tracking ──
 let scrollT = 0;
 let smoothScrollT = 0;
+
+// ── Success state (set to true after form submit) ──
+let successActive = false;
+let successRingT  = 0;
 window.addEventListener('scroll', () => {
   const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
   scrollT = maxScroll > 0 ? Math.min(1, window.scrollY / maxScroll) : 0;
 }, { passive: true });
 
 // ── Camera scroll keyframes [scrollT, pos, lookAt] ──
-// 3-point: zoom in, then continuously pull back — no static hover phase
+// 4-point sequence:
+//   hold (text visible) → zoom in continuously through full dissolution → pull back for particles/form
 const camKF = isMobile ? [
-  { t: 0.00, p: [0, 1.2, 5.5], l: [0, 0.0, 0] },
-  { t: 0.30, p: [0, 0.5, 2.0], l: [0, 0.0, 0] },
-  { t: 1.00, p: [0, 1.5, 9.5], l: [0, 0.0, 0] },
+  { t: 0.00, p: [0, 1.2, 5.5], l: [0, 0.0,  0] },
+  { t: 0.25, p: [0, 1.2, 5.5], l: [0, 0.0,  0] }, // hold — text visible
+  { t: 0.82, p: [0, 0.5, 2.0], l: [0, 0.0,  0] }, // zoom in all the way through dissolution
+  { t: 1.00, p: [0, 1.2, 6.0], l: [0, 0.0,  0] }, // pull back for particles / form
 ] : [
   { t: 0.00, p: [0, 1.8, 4.5], l: [0, 0.15, 0] },
-  { t: 0.30, p: [0, 0.8, 2.5], l: [0, 0.00, 0] },
-  { t: 1.00, p: [0, 1.8, 11.0], l: [0, 0.00, 0] },
+  { t: 0.25, p: [0, 1.8, 4.5], l: [0, 0.12, 0] }, // hold — text visible
+  { t: 0.82, p: [0, 0.6, 1.6], l: [0, 0.00, 0] }, // zoom in all the way through dissolution
+  { t: 1.00, p: [0, 1.0, 5.0], l: [0, 0.00, 0] }, // pull back for particles / form
 ];
 const _initKF = camKF[0];
 const _targetCamPos  = new THREE.Vector3(..._initKF.p);
@@ -1615,16 +1623,15 @@ function getCamState(st) {
 }
 
 // ── Circle Rings ──
-function drawRings(t, sst) {
+// successMode = true → larger circles, darker fills, slower rotation (success screen)
+function drawRings(t, sst, successMode = false) {
   const W = window.innerWidth, H = window.innerHeight;
   const cx = W / 2, cy = H / 2;
   const ref = Math.min(W * 0.9, H * 0.8);
 
   overlayCtx.clearRect(0, 0, W, H);
 
-  // Growth: ring radius expands linearly; circle size stays tiny (cubic) until final stage
   const GROW_START = 0.20, GROW_END = 0.78;
-  const FADE_START = 0.84, FADE_END = 1.00;
 
   let sizeP, alpha;
   if (sst < GROW_START) {
@@ -1632,26 +1639,24 @@ function drawRings(t, sst) {
   } else if (sst < GROW_END) {
     const r = (sst - GROW_START) / (GROW_END - GROW_START);
     sizeP = r * r * (3 - 2 * r);
-    // alpha fades in quickly so rings are visible as tiny glowing dots from early on
     alpha = Math.min(sizeP * 6, 1);
-  } else if (sst < FADE_START) {
-    sizeP = 1; alpha = 1;
   } else {
-    sizeP = 1;
-    alpha = Math.max(0, 1 - (sst - FADE_START) / (FADE_END - FADE_START));
+    sizeP = 1; alpha = 1; // success mode never fades
   }
 
   if (alpha < 0.005) return;
 
-  const rings = [
-    { radius: ref * 0.33, circleR: ref * 0.045, dir:  1, speed: 0.09, ri: 0 },
-    { radius: ref * 0.62, circleR: ref * 0.038, dir: -1, speed: 0.06, ri: 1 },
+  // Success mode: rings pushed outward to clear center text, circles refined/smaller
+  const rings = successMode ? [
+    { radius: ref * 0.50, circleR: ref * 0.038, dir:  1, speed: 0.048, ri: 0 },
+    { radius: ref * 0.80, circleR: ref * 0.032, dir: -1, speed: 0.030, ri: 1 },
+  ] : [
+    { radius: ref * 0.33, circleR: ref * 0.045, dir:  1, speed: 0.09,  ri: 0 },
+    { radius: ref * 0.62, circleR: ref * 0.038, dir: -1, speed: 0.06,  ri: 1 },
   ];
 
   for (const ring of rings) {
     const ringR = ring.radius * sizeP;
-    // Cubic curve: circles stay very small (≤12% of final) for most of the scroll,
-    // then rapidly bloom to full size only as sizeP approaches 1 (the final stage)
     const circR = ring.circleR * Math.pow(sizeP, 3);
     const rot   = t * ring.speed * ring.dir;
 
@@ -1664,52 +1669,52 @@ function drawRings(t, sst) {
 
       overlayCtx.save();
 
-      // ── Fill: dark warm-gray base (4A4743 @ 18%) + radial center glow (white @ 5%) ──
+      // Dark circular background — opaque in success mode, subtle in scroll mode
       overlayCtx.beginPath();
       overlayCtx.arc(x, y, circR, 0, Math.PI * 2);
-      overlayCtx.fillStyle = `rgba(74,71,67,${alpha * 0.18})`;
+      overlayCtx.fillStyle = successMode
+        ? `rgba(22,18,14,${alpha * 0.88})`
+        : `rgba(74,71,67,${alpha * 0.18})`;
       overlayCtx.fill();
 
+      // Subtle inner glow
       const radFill = overlayCtx.createRadialGradient(x, y, 0, x, y, circR);
-      radFill.addColorStop(0, `rgba(255,255,255,${alpha * 0.05})`);
+      radFill.addColorStop(0, `rgba(255,255,255,${alpha * (successMode ? 0.04 : 0.05)})`);
       radFill.addColorStop(1, `rgba(255,255,255,0)`);
       overlayCtx.beginPath();
       overlayCtx.arc(x, y, circR, 0, Math.PI * 2);
       overlayCtx.fillStyle = radFill;
       overlayCtx.fill();
 
-      // ── Stroke: gold gradient (F4D058 → FFD53C → FFF7DA) combining all three Figma layers ──
-      // Gradient is angled relative to the circle's position on the ring for organic variety
+      // Gold ring stroke
       const gAngle = angle + Math.PI * 0.25;
       const strokeGrad = overlayCtx.createLinearGradient(
         x + Math.cos(gAngle) * circR, y + Math.sin(gAngle) * circR,
         x - Math.cos(gAngle) * circR, y - Math.sin(gAngle) * circR
       );
-      strokeGrad.addColorStop(0,   `rgba(244,208,88,${alpha * 0.35})`);  // F4D058 @ 50% layer dominant
-      strokeGrad.addColorStop(0.5, `rgba(255,213,60,${alpha * 0.22})`);  // FFD53C @ 30% layer
-      strokeGrad.addColorStop(1,   `rgba(255,247,218,${alpha * 0.12})`); // FFF7DA @ 20% layer
+      const strokeAlpha = successMode ? alpha * 0.55 : alpha * 0.35;
+      strokeGrad.addColorStop(0,   `rgba(244,208,88,${strokeAlpha})`);
+      strokeGrad.addColorStop(0.5, `rgba(255,213,60,${strokeAlpha * 0.65})`);
+      strokeGrad.addColorStop(1,   `rgba(255,247,218,${strokeAlpha * 0.35})`);
 
-      // Soft gold glow (simulates the radial stroke spread)
-      overlayCtx.shadowBlur  = circR * 0.4;
-      overlayCtx.shadowColor = `rgba(244,208,88,${alpha * 0.08})`;
+      overlayCtx.shadowBlur  = circR * (successMode ? 0.6 : 0.4);
+      overlayCtx.shadowColor = `rgba(244,208,88,${alpha * (successMode ? 0.14 : 0.08)})`;
 
       overlayCtx.beginPath();
       overlayCtx.arc(x, y, circR, 0, Math.PI * 2);
       overlayCtx.strokeStyle = strokeGrad;
-      overlayCtx.lineWidth   = Math.max(1.0, circR * 0.035);
+      overlayCtx.lineWidth   = Math.max(1.0, circR * (successMode ? 0.030 : 0.035));
       overlayCtx.stroke();
 
-      // ── Logo ──
+      // Logo
       const logo = ringLogos[ring.ri][i];
       if (logo && logo.loaded) {
         overlayCtx.save();
-        overlayCtx.globalAlpha = alpha * 0.92;
+        overlayCtx.globalAlpha = alpha * (successMode ? 0.96 : 0.92);
         overlayCtx.beginPath();
-        overlayCtx.arc(x, y, circR * 0.82, 0, Math.PI * 2);
+        overlayCtx.arc(x, y, circR * 0.78, 0, Math.PI * 2);
         overlayCtx.clip();
-        // maxDim ≤ clipRadius × √2 ensures even square logos never clip at corners
-        // clipRadius = circR × 0.82 → max safe = circR × 1.16; use 1.08 for breathing room
-        const maxDim = circR * 1.08;
+        const maxDim = circR * (successMode ? 1.10 : 1.08);
         const nw = logo.naturalWidth  || 1;
         const nh = logo.naturalHeight || 1;
         const aspect = nw / nh;
@@ -1805,7 +1810,7 @@ function animate() {
   // Crossfade: crack fades out, logo fades in, over 65–100% of intro (particles nearly assembled before logo appears)
   const crossfade  = Math.max(0, Math.min(1, (introT - 0.65) / 0.35));
   const logoFadeIn = crossfade;
-  const logoFadeOut = 1 - Math.max(0, Math.min(1, (smoothScrollT - 0.02) / 0.18));
+  const logoFadeOut = 1 - Math.max(0, Math.min(1, (smoothScrollT - 0.42) / 0.13));
   logoMat.uniforms.uOpacity.value = logoFadeIn * logoFadeOut;
   logoMesh.visible = logoMat.uniforms.uOpacity.value > 0.001;
   // Subtle warm boost on logo while it first appears, fades to 0 over 2s after intro
@@ -1814,7 +1819,7 @@ function animate() {
   logoMat.uniforms.uIntroGlow.value = introGlow;
 
   // Crack: assembles during intro (fading out as logo fades in), disintegrates on scroll
-  const crackProgress = Math.max(0, Math.min(1, (smoothScrollT - 0.02) / 0.60));
+  const crackProgress = Math.max(0, Math.min(1, (smoothScrollT - 0.42) / 0.36));
   if (crackSystem) {
     if (isIntroPhase) {
       crackSystem.visible = true;
@@ -1845,7 +1850,48 @@ function animate() {
   barGroup.rotation.y += (baseRotY + targetRotY * 0.5 * parallaxFade - barGroup.rotation.y) * 0.025;
   barGroup.rotation.x += (baseRotX + targetRotX * 0.5 * parallaxFade - barGroup.rotation.x) * 0.025;
 
-  drawRings(t, smoothScrollT);
+  // bg2gold.png sits behind the transparent canvas — fades in fast on first scroll
+  // particles always render on top of it
+  const bgImageEl = document.getElementById('bg-image');
+  if (bgImageEl) {
+    const bgAlpha = Math.max(0, Math.min(1.0, (smoothScrollT - 0.06) / 0.14));
+    bgImageEl.style.opacity = bgAlpha.toFixed(3);
+  }
+
+  // Warm spotlight gradient on top of texture
+  const bgGlowEl = document.getElementById('bg-glow');
+  if (bgGlowEl) {
+    bgGlowEl.style.opacity = Math.max(0, Math.min(1, (smoothScrollT - 0.05) / 0.20)).toFixed(3);
+  }
+
+  // "Physical Gold, Digital Access." — appears mid-scroll, stays through bar dissolution
+  const textEl = document.getElementById('text-overlay');
+  if (textEl) {
+    if (successActive) {
+      textEl.style.opacity = '0';
+    } else {
+      const tIn  = Math.max(0, Math.min(1, (smoothScrollT - 0.18) / 0.10));
+      const tOut = 1 - Math.max(0, Math.min(1, (smoothScrollT - 0.62) / 0.10));
+      textEl.style.opacity = (tIn * tOut).toFixed(3);
+    }
+  }
+
+  // Waitlist form — fades in once bar is gone and particles float freely
+  const formEl = document.getElementById('form-container');
+  if (formEl && !successActive) {
+    const fAlpha = Math.max(0, Math.min(1, (smoothScrollT - 0.76) / 0.08));
+    formEl.style.opacity = fAlpha.toFixed(3);
+    formEl.style.pointerEvents = fAlpha > 0.05 ? 'auto' : 'none';
+  }
+
+  // Partner logo rings — success state only (not scroll-driven)
+  if (successActive) {
+    successRingT = Math.min(successRingT + dt * 0.35, 0.82);
+    drawRings(t, successRingT, true);
+  } else {
+    overlayCtx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+  }
+
   composer.render();
 }
 renderer.setAnimationLoop(animate);
@@ -1858,4 +1904,49 @@ window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
   composer.setSize(window.innerWidth, window.innerHeight);
   mat.uniforms.uPixelRatio.value = Math.min(window.devicePixelRatio, 2);
+});
+
+// ── Waitlist form submit ──
+document.getElementById('waitlist-form')?.addEventListener('submit', (e) => {
+  e.preventDefault();
+
+  // Basic required-field validation
+  const fields = e.target.querySelectorAll('[required]');
+  for (const f of fields) {
+    if (!f.value.trim()) { f.focus(); return; }
+  }
+
+  const btn    = document.getElementById('submit-btn');
+  const formEl = document.getElementById('form-container');
+  const succEl = document.getElementById('success-overlay');
+
+  btn.textContent = 'Joining…';
+  btn.disabled = true;
+
+  // TODO: replace setTimeout with a real API call (fetch/POST to your backend)
+  setTimeout(() => {
+    // Set successActive IMMEDIATELY so the animate loop stops overriding form opacity
+    successActive = true;
+    successRingT  = 0;
+    formEl.style.opacity       = '0';
+    formEl.style.pointerEvents = 'none';
+    document.body.style.overflow = 'hidden'; // lock scroll now
+
+    setTimeout(() => {
+      succEl.style.opacity       = '1';
+      succEl.style.pointerEvents = 'auto';
+    }, 400);
+  }, 1000);
+});
+
+// ── Back to Home ──
+document.getElementById('back-home-btn')?.addEventListener('click', () => {
+  const succEl = document.getElementById('success-overlay');
+  succEl.style.opacity       = '0';
+  succEl.style.pointerEvents = 'none';
+  successActive = false;
+  successRingT  = 0;
+  // Re-enable scroll and return to top
+  document.body.style.overflow = '';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 });

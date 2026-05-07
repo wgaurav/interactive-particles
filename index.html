@@ -4,13 +4,152 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script>if (history.scrollRestoration) history.scrollRestoration = 'manual';</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
   <style>
     * { margin: 0; padding: 0; outline: none !important; box-sizing: border-box; }
-    html, body { width: 100%; background: #000; }
+    html, body { width: 100%; background: #05050A; }
     body { overflow-y: scroll; }
-    #root { position: fixed; top: 0; left: 0; width: 100%; height: 100%; }
+    /* canvas sits above bg-image so particles render over the texture */
+    #root { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 2; }
     canvas { display: block; outline: none !important; }
-    #scroll-spacer { height: 250vh; pointer-events: none; }
+    #scroll-spacer { height: 400vh; pointer-events: none; }
+
+    /* bg2gold.png — base texture layer, BEHIND the transparent canvas */
+    #bg-image {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: url('assets/bg2gold.png') center / cover no-repeat;
+      pointer-events: none; z-index: 1; opacity: 0;
+    }
+
+    /* Warm spotlight gradient on top of texture, below canvas */
+    #bg-glow {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: radial-gradient(ellipse 70% 48% at 50% 0%, rgba(140,100,30,0.22) 0%, transparent 62%);
+      pointer-events: none; z-index: 1; opacity: 0;
+    }
+
+    /* "Physical Gold, Digital Access." */
+    #text-overlay {
+      position: fixed; bottom: 6%; left: 0; width: 100%;
+      text-align: center; pointer-events: none; z-index: 5; opacity: 0;
+      font-family: 'Inter', -apple-system, 'Helvetica Neue', sans-serif;
+    }
+    #text-overlay p {
+      font-size: clamp(22px, 3.2vw, 44px);
+      font-weight: 300; color: rgba(255,255,255,0.90);
+      letter-spacing: 0.02em; line-height: 1.45;
+    }
+    #text-overlay .gold { color: #C8A84B; }
+
+    /* Waitlist form */
+    #form-container {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      z-index: 20; opacity: 0; pointer-events: none;
+      font-family: 'Inter', -apple-system, 'Helvetica Neue', sans-serif;
+    }
+    #form-container h2 {
+      font-size: clamp(18px, 2vw, 26px); font-weight: 300;
+      color: rgba(255,255,255,0.88); letter-spacing: 0.06em; margin-bottom: 28px;
+    }
+    #waitlist-form { display: flex; flex-direction: column; gap: 10px; width: min(480px, 90vw); }
+    .form-row { display: flex; gap: 10px; }
+    .form-row > * { flex: 1; min-width: 0; }
+
+    .form-input, .form-select {
+      width: 100%;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 10px; padding: 13px 16px;
+      color: rgba(255,255,255,0.80);
+      font-family: inherit; font-size: 14px; font-weight: 300; letter-spacing: 0.01em;
+      appearance: none; -webkit-appearance: none; transition: border-color 0.2s;
+    }
+    .form-input::placeholder { color: rgba(255,255,255,0.32); }
+    .form-input:focus, .form-select:focus { border-color: rgba(200,168,75,0.50); outline: none; }
+    .form-select {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='7' fill='none'%3E%3Cpath d='M1 1l5 5 5-5' stroke='rgba(255,255,255,0.38)' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 14px center;
+      padding-right: 36px; cursor: pointer;
+    }
+    .form-select option { background: #0F0F18; color: rgba(255,255,255,0.80); }
+    .form-select.unset { color: rgba(255,255,255,0.32); }
+
+    #submit-btn {
+      width: 100%; padding: 15px;
+      background: linear-gradient(90deg, #9A6208 0%, #C8900C 20%, #E8C050 50%, #C8900C 80%, #9A6208 100%);
+      border: none; border-radius: 100px;
+      color: #1A0A00; font-family: inherit; font-size: 15px; font-weight: 500;
+      letter-spacing: 0.04em; cursor: pointer; margin-top: 4px; transition: opacity 0.2s;
+    }
+    #submit-btn:hover:not(:disabled) { opacity: 0.88; }
+    #submit-btn:disabled { opacity: 0.50; cursor: not-allowed; }
+    .form-disclaimer {
+      max-width: min(480px, 90vw); text-align: center;
+      font-size: 13px; font-weight: 300; color: rgba(255,255,255,0.32);
+      line-height: 1.70; margin-top: 22px;
+    }
+
+    /* ── Success overlay — z-index 25 sits above form (20) so no bleed-through ── */
+    #success-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      z-index: 25; opacity: 0; pointer-events: none;
+      font-family: 'Inter', -apple-system, 'Helvetica Neue', sans-serif;
+      /* solid bg so form behind is fully hidden */
+      background: transparent;
+    }
+    /* center card */
+    .success-body {
+      display: flex; flex-direction: column; align-items: center;
+      text-align: center; padding: 0 24px;
+    }
+    #success-overlay h2 {
+      font-size: clamp(38px, 6vw, 80px);
+      font-weight: 300; font-style: italic;
+      color: #C8A84B;
+      letter-spacing: -0.01em;
+      line-height: 1.1;
+      margin-bottom: 18px;
+    }
+    #success-overlay .success-sub {
+      font-size: clamp(13px, 1.15vw, 16px);
+      font-weight: 300; color: rgba(255,255,255,0.55);
+      letter-spacing: 0.01em; max-width: 400px; line-height: 1.75;
+      margin-bottom: 28px;
+    }
+    #back-home-btn {
+      padding: 11px 30px;
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.22);
+      border-radius: 100px;
+      color: rgba(255,255,255,0.55);
+      font-family: inherit; font-size: 14px; font-weight: 300;
+      letter-spacing: 0.04em; cursor: pointer;
+      transition: border-color 0.2s, color 0.2s;
+    }
+    #back-home-btn:hover {
+      border-color: rgba(200,168,75,0.55);
+      color: rgba(200,168,75,0.90);
+    }
+    /* footer fixed to bottom of success screen */
+    .success-footer {
+      position: absolute; bottom: 0; left: 0; width: 100%;
+      text-align: center; padding: 16px 24px;
+      font-size: 11.5px; font-weight: 300;
+      color: rgba(255,255,255,0.25); line-height: 1.65;
+    }
+
+    @media (max-width: 600px) {
+      .form-row { flex-direction: column; }
+      #text-overlay { bottom: 4%; }
+      #success-overlay h2 { font-size: clamp(32px, 10vw, 52px); }
+      .success-footer { font-size: 10px; }
+    }
   </style>
 
   <script type="importmap">
@@ -29,7 +168,83 @@
 <body>
   <div id="root"></div>
   <div id="scroll-spacer"></div>
+
+  <!-- bg2gold.png texture — fades in on first scroll -->
+  <div id="bg-image"></div>
+
+  <!-- Warm spotlight gradient -->
+  <div id="bg-glow"></div>
+
+  <!-- "Physical Gold, Digital Access." -->
+  <div id="text-overlay">
+    <p>Physical <span class="gold">Gold</span>,<br>Digital Access.</p>
+  </div>
+
+  <!-- Waitlist form -->
+  <div id="form-container">
+    <h2>Get Early Access.</h2>
+    <form id="waitlist-form" novalidate>
+      <div class="form-row">
+        <input class="form-input" type="text"  name="firstName" placeholder="First name*" required>
+        <input class="form-input" type="text"  name="lastName"  placeholder="Last name*"  required>
+      </div>
+      <div class="form-row">
+        <select class="form-select unset" name="orgType" required>
+          <option value="" disabled selected>Organization type*</option>
+          <option value="individual">Individual Investor</option>
+          <option value="family-office">Family Office</option>
+          <option value="fund">Hedge Fund / Asset Manager</option>
+          <option value="corporate">Corporate Treasury</option>
+          <option value="defi">DeFi Protocol</option>
+          <option value="other">Other</option>
+        </select>
+        <select class="form-select unset" name="interest" required>
+          <option value="" disabled selected>Interested in*</option>
+          <option value="physical">Physical Gold Redemption</option>
+          <option value="digital">Digital Token Access</option>
+          <option value="both">Both</option>
+          <option value="info">Investment Information</option>
+        </select>
+      </div>
+      <input class="form-input" type="email" name="email" placeholder="Your email address*" required>
+      <button type="submit" id="submit-btn">Join the Gold Letter</button>
+    </form>
+    <p class="form-disclaimer">
+      By joining the founders list, you'll be part of the first circle of the Palm
+      Global Gold community. We'll come to you first with launch access, AMA
+      invites, listing alerts, and verified audit reports before public release.
+    </p>
+  </div>
+
+  <!-- Success state — scroll locked when visible -->
+  <div id="success-overlay">
+    <div class="success-body">
+      <h2>You're in</h2>
+      <p class="success-sub">
+        Welcome to the founders list.<br>
+        You'll be the first to receive our launch access, white paper,<br>
+        AMA invitations, and listing alerts.<br>
+        Watch your inbox. The standard is being set.
+      </p>
+      <button id="back-home-btn">Back to Home</button>
+    </div>
+    <p class="success-footer">
+      Palm Global Gold ($PPG) is a regulated, 1:1 gold-backed token built for the way value should move
+      in the digital era. Each token is backed by physical gold held under ADGM/FSRA regulations, with
+      independent transaction oversight from Digital RFQ Limited, FCA regulated.
+      No team allocations. No speculative supply. Just gold, on-chain, on your terms.
+    </p>
+  </div>
+
   <script>window.scrollTo(0, 0);</script>
-  <script type="module" src="./index.js?v=2"></script>
+
+  <!-- Select placeholder colour -->
+  <script>
+    document.querySelectorAll('.form-select').forEach(sel => {
+      sel.addEventListener('change', () => sel.classList.remove('unset'));
+    });
+  </script>
+
+  <script type="module" src="./index.js?v=5"></script>
 </body>
 </html>
