@@ -1803,6 +1803,14 @@ function animate() {
   smoothScrollT += (scrollT - smoothScrollT) * 0.06;
   mat.uniforms.uScrollT.value = smoothScrollT;
 
+  // Nav — fades in as bar finishes assembling
+  const navEl = document.getElementById('site-nav');
+  if (navEl) {
+    const navOpacity = Math.max(0, Math.min(1, (introT - 0.82) / 0.18));
+    navEl.style.opacity = navOpacity.toFixed(3);
+    navEl.style.pointerEvents = navOpacity > 0 ? 'auto' : 'none';
+  }
+
   // Intro phase: crack particles assemble into logo; logo texture crossfades in
   const isIntroPhase = introT < 1.0;
   const introEased = introT * introT * (3.0 - 2.0 * introT);
@@ -1813,9 +1821,11 @@ function animate() {
   const logoFadeOut = 1 - Math.max(0, Math.min(1, (smoothScrollT - 0.42) / 0.13));
   logoMat.uniforms.uOpacity.value = logoFadeIn * logoFadeOut;
   logoMesh.visible = logoMat.uniforms.uOpacity.value > 0.001;
-  // Subtle warm boost on logo while it first appears, fades to 0 over 2s after intro
-  const postIntroT = Math.max(0, t - 2.8);
-  const introGlow  = isIntroPhase ? crossfade : Math.max(0, 1.0 - postIntroT / 2.0);
+  // Glow: fades out after intro, then smoothly rises again as camera zooms in on scroll
+  const postIntroT  = Math.max(0, t - 2.8);
+  const baseGlow    = isIntroPhase ? crossfade : Math.max(0, 1.0 - postIntroT / 2.0);
+  const scrollGlow  = Math.max(0, Math.min(1, (smoothScrollT - 0.22) / 0.22));
+  const introGlow   = Math.min(1.0, baseGlow + scrollGlow * 0.80);
   logoMat.uniforms.uIntroGlow.value = introGlow;
 
   // Crack: assembles during intro (fading out as logo fades in), disintegrates on scroll
@@ -1871,7 +1881,7 @@ function animate() {
       textEl.style.opacity = '0';
     } else {
       const tIn  = Math.max(0, Math.min(1, (smoothScrollT - 0.18) / 0.10));
-      const tOut = 1 - Math.max(0, Math.min(1, (smoothScrollT - 0.62) / 0.10));
+      const tOut = 1 - Math.max(0, Math.min(1, (smoothScrollT - 0.34) / 0.11));
       textEl.style.opacity = (tIn * tOut).toFixed(3);
     }
   }
@@ -1949,4 +1959,13 @@ document.getElementById('back-home-btn')?.addEventListener('click', () => {
   // Re-enable scroll and return to top
   document.body.style.overflow = '';
   window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+
+// Nav logo — scroll to top during scroll phase or when form is untouched
+document.querySelector('.nav-logo')?.addEventListener('click', () => {
+  if (successActive) return;
+  const fields = document.querySelectorAll('#waitlist-form input[type="text"], #waitlist-form input[type="email"], #waitlist-form select');
+  const hasData = [...fields].some(f => f.value.trim() !== '' && f.value !== '');
+  if (hasData) return;
+  window.scrollTo(0, 0);
 });

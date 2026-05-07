@@ -1,3 +1,4 @@
+<!-- v29 -->
 <!DOCTYPE html>
 <html>
 <head>
@@ -6,7 +7,7 @@
   <script>if (history.scrollRestoration) history.scrollRestoration = 'manual';</script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,300;0,400;0,500;1,300&family=Inter+Tight:wght@400;500&family=PT+Serif:wght@400&display=swap" rel="stylesheet">
   <style>
     * { margin: 0; padding: 0; outline: none !important; box-sizing: border-box; }
     html, body { width: 100%; background: #05050A; }
@@ -15,6 +16,43 @@
     #root { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 2; }
     canvas { display: block; outline: none !important; }
     #scroll-spacer { height: 400vh; pointer-events: none; }
+
+    /* Noise grain — sits below canvas (z:1), Overlay blend on background only, matches Figma */
+    #noise-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: url('assets/noise.png') center / cover no-repeat;
+      mix-blend-mode: overlay;
+      opacity: 0.29;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    /* Nav */
+    #site-nav {
+      position: fixed; top: 0; left: 0; width: 100%; height: 64px;
+      z-index: 10; opacity: 0; pointer-events: none;
+      display: flex; align-items: center;
+    }
+    .nav-logo {
+      display: flex; align-items: center; gap: 4px;
+      margin-left: 32px; padding: 4px; cursor: pointer;
+    }
+    .nav-logo img { width: 28px; height: 28px; display: block; }
+    .nav-logo-name {
+      font-family: 'PT Serif', Georgia, serif;
+      font-size: 20px; font-weight: 400;
+      letter-spacing: -0.05em; color: #FFFFFF;
+    }
+    .nav-logo-gold {
+      display: inline-block;
+      font-family: 'Inter Tight', sans-serif;
+      font-size: 20px; font-weight: 500;
+      letter-spacing: -0.05em;
+      padding-right: 0.08em;
+      background: linear-gradient(135deg, #F5C34B 0%, #FDF0D2 50%, #F5C34B 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
 
     /* bg2gold.png — base texture layer, BEHIND the transparent canvas */
     #bg-image {
@@ -37,11 +75,22 @@
       font-family: 'Inter', -apple-system, 'Helvetica Neue', sans-serif;
     }
     #text-overlay p {
-      font-size: clamp(22px, 3.2vw, 44px);
-      font-weight: 300; color: rgba(255,255,255,0.90);
-      letter-spacing: 0.02em; line-height: 1.45;
+      font-family: 'Inter Tight', -apple-system, 'Helvetica Neue', sans-serif;
+      font-size: clamp(28px, 4.8vw, 68px);
+      font-weight: 400; line-height: 110%; letter-spacing: 0;
+      padding-bottom: 0.1em;
+      background: radial-gradient(circle at 57% 100%, rgba(236,236,238,1) 7%, rgba(255,255,255,0.45) 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
     }
-    #text-overlay .gold { color: #C8A84B; }
+    #text-overlay .gold {
+      display: inline-block;
+      font-family: 'PT Serif', Georgia, serif;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #F5C34B 0%, #FDF0D2 50%, #F5C34B 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
 
     /* Waitlist form */
     #form-container {
@@ -78,15 +127,34 @@
     .form-select option { background: #0F0F18; color: rgba(255,255,255,0.80); }
     .form-select.unset { color: rgba(255,255,255,0.32); }
 
-    #submit-btn {
-      width: 100%; padding: 15px;
-      background: linear-gradient(90deg, #9A6208 0%, #C8900C 20%, #E8C050 50%, #C8900C 80%, #9A6208 100%);
-      border: none; border-radius: 100px;
-      color: #1A0A00; font-family: inherit; font-size: 15px; font-weight: 500;
-      letter-spacing: 0.04em; cursor: pointer; margin-top: 4px; transition: opacity 0.2s;
+    .other-input {
+      display: none; width: 100%;
     }
-    #submit-btn:hover:not(:disabled) { opacity: 0.88; }
-    #submit-btn:disabled { opacity: 0.50; cursor: not-allowed; }
+    .other-input.visible { display: block; }
+
+    #submit-btn {
+      position: relative;
+      width: 100%; height: 40px; padding: 0;
+      background:
+        linear-gradient(135deg, transparent 0%, rgba(251,246,238,0.60) 49%, transparent 100%),
+        linear-gradient(147deg, rgba(255,215,153,0.85) 0%, rgba(255,183,69,0.85) 0%, rgba(255,196,100,0.85) 17%, rgba(227,144,14,0.85) 83%);
+      border: none; border-radius: 12px;
+      color: #05050A; font-family: 'Inter Tight', inherit; font-size: 14px; font-weight: 500;
+      letter-spacing: 0.02em; cursor: pointer; margin-top: 8px;
+      box-shadow: 2px 3px 25px rgba(0,0,0,0.20);
+      backdrop-filter: blur(20px);
+      transition: opacity 0.2s;
+    }
+    #submit-btn::before {
+      content: '';
+      position: absolute; inset: 0; border-radius: 12px; padding: 2px;
+      background: linear-gradient(143deg, rgba(251,249,246,0.8) 0%, rgba(255,208,135,0.8) 100%);
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor; mask-composite: exclude;
+      pointer-events: none;
+    }
+    #submit-btn:hover:not(:disabled) { opacity: 0.85; }
+    #submit-btn:disabled { opacity: 0.45; cursor: not-allowed; }
     .form-disclaimer {
       max-width: min(480px, 90vw); text-align: center;
       font-size: 13px; font-weight: 300; color: rgba(255,255,255,0.32);
@@ -99,56 +167,70 @@
       display: flex; flex-direction: column;
       align-items: center; justify-content: center;
       z-index: 25; opacity: 0; pointer-events: none;
-      font-family: 'Inter', -apple-system, 'Helvetica Neue', sans-serif;
-      /* solid bg so form behind is fully hidden */
       background: transparent;
     }
-    /* center card */
+    /* warm golden glow at top — matches Figma BG ellipses */
+    #success-overlay::before {
+      content: '';
+      position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+      width: 900px; height: 560px;
+      background: radial-gradient(ellipse at 50% 10%, rgba(245,195,75,0.13) 0%, transparent 68%);
+      pointer-events: none;
+    }
     .success-body {
       display: flex; flex-direction: column; align-items: center;
-      text-align: center; padding: 0 24px;
+      text-align: center; padding: 0 24px; gap: 37px;
     }
     #success-overlay h2 {
-      font-size: clamp(38px, 6vw, 80px);
-      font-weight: 300; font-style: italic;
-      color: #C8A84B;
-      letter-spacing: -0.01em;
-      line-height: 1.1;
-      margin-bottom: 18px;
+      font-family: 'PT Serif', Georgia, serif;
+      font-size: clamp(38px, 5vw, 72px);
+      font-weight: 400; font-style: normal;
+      letter-spacing: -0.02em; line-height: 110%;
+      margin: 0;
+      background:
+        linear-gradient(135deg, transparent 0%, rgba(251,246,238,0.60) 49%, transparent 100%),
+        linear-gradient(147deg, rgba(255,215,153,0.85) 0%, rgba(255,183,69,0.85) 0%, rgba(255,196,100,0.85) 17%, rgba(227,144,14,0.85) 83%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
     }
     #success-overlay .success-sub {
-      font-size: clamp(13px, 1.15vw, 16px);
-      font-weight: 300; color: rgba(255,255,255,0.55);
-      letter-spacing: 0.01em; max-width: 400px; line-height: 1.75;
-      margin-bottom: 28px;
+      font-family: 'Inter Tight', sans-serif;
+      font-size: 18px; font-weight: 400;
+      color: #A5A7AF; line-height: 24px;
+      max-width: 449px; margin: 0;
     }
     #back-home-btn {
-      padding: 11px 30px;
+      width: 160px; height: 40px; padding: 0;
+      display: flex; align-items: center; justify-content: center;
       background: transparent;
-      border: 1px solid rgba(255,255,255,0.22);
-      border-radius: 100px;
-      color: rgba(255,255,255,0.55);
-      font-family: inherit; font-size: 14px; font-weight: 300;
-      letter-spacing: 0.04em; cursor: pointer;
-      transition: border-color 0.2s, color 0.2s;
+      border: 1px solid rgba(249,242,225,0.50);
+      border-radius: 12px;
+      color: rgba(249,242,225,0.50);
+      font-family: 'Inter Tight', sans-serif; font-size: 14px; font-weight: 500;
+      cursor: pointer; transition: border-color 0.2s, color 0.2s;
     }
     #back-home-btn:hover {
-      border-color: rgba(200,168,75,0.55);
-      color: rgba(200,168,75,0.90);
+      border-color: rgba(249,242,225,0.85);
+      color: rgba(249,242,225,0.85);
     }
-    /* footer fixed to bottom of success screen */
     .success-footer {
       position: absolute; bottom: 0; left: 0; width: 100%;
       text-align: center; padding: 16px 24px;
-      font-size: 11.5px; font-weight: 300;
-      color: rgba(255,255,255,0.25); line-height: 1.65;
+      font-family: 'Inter Tight', sans-serif;
+      font-size: 12px; font-weight: 400;
+      color: rgba(250,250,250,0.60); line-height: 130%;
     }
 
     @media (max-width: 600px) {
       .form-row { flex-direction: column; }
       #text-overlay { bottom: 4%; }
-      #success-overlay h2 { font-size: clamp(32px, 10vw, 52px); }
+      #text-overlay p { font-size: clamp(38px, 9vw, 56px); }
+      #success-overlay h2 { font-size: clamp(36px, 10vw, 52px); }
       .success-footer { font-size: 10px; }
+
+      /* Mobile nav — centered logo */
+      #site-nav { justify-content: center; }
+      .nav-logo { margin-left: 0; }
     }
   </style>
 
@@ -166,6 +248,14 @@
 
 </head>
 <body>
+  <nav id="site-nav">
+    <div class="nav-logo">
+      <img src="assets/logo.png" alt="Palm Promax Gold">
+      <span class="nav-logo-name">Palm Promax</span>
+      <span class="nav-logo-gold">GOLD</span>
+    </div>
+  </nav>
+
   <div id="root"></div>
   <div id="scroll-spacer"></div>
 
@@ -174,6 +264,9 @@
 
   <!-- Warm spotlight gradient -->
   <div id="bg-glow"></div>
+
+  <!-- Noise grain — overlays background only, below canvas -->
+  <div id="noise-overlay"></div>
 
   <!-- "Physical Gold, Digital Access." -->
   <div id="text-overlay">
@@ -189,23 +282,26 @@
         <input class="form-input" type="text"  name="lastName"  placeholder="Last name*"  required>
       </div>
       <div class="form-row">
-        <select class="form-select unset" name="orgType" required>
+        <select class="form-select unset" name="orgType" id="orgType" required>
           <option value="" disabled selected>Organization type*</option>
-          <option value="individual">Individual Investor</option>
+          <option value="hedge-fund">Hedge Fund / Asset Manager</option>
           <option value="family-office">Family Office</option>
-          <option value="fund">Hedge Fund / Asset Manager</option>
-          <option value="corporate">Corporate Treasury</option>
-          <option value="defi">DeFi Protocol</option>
+          <option value="commodity-trader">Commodity Trader</option>
+          <option value="market-maker">Market Maker / OTC Desk</option>
+          <option value="dao">DAO / Protocol Treasury</option>
           <option value="other">Other</option>
         </select>
-        <select class="form-select unset" name="interest" required>
+        <select class="form-select unset" name="interest" id="interest" required>
           <option value="" disabled selected>Interested in*</option>
-          <option value="physical">Physical Gold Redemption</option>
-          <option value="digital">Digital Token Access</option>
-          <option value="both">Both</option>
-          <option value="info">Investment Information</option>
+          <option value="trading">Buying / trading TCU29</option>
+          <option value="otc">OTC block trades</option>
+          <option value="liquidity">Providing liquidity / Market making</option>
+          <option value="listing">Exchange listing partnership</option>
+          <option value="other">Other</option>
         </select>
       </div>
+      <input class="form-input other-input" type="text" id="orgType-other" name="orgTypeOther" placeholder="Please specify your organization type">
+      <input class="form-input other-input" type="text" id="interest-other" name="interestOther" placeholder="Please specify your interest">
       <input class="form-input" type="email" name="email" placeholder="Your email address*" required>
       <button type="submit" id="submit-btn">Join the Gold Letter</button>
     </form>
@@ -222,9 +318,7 @@
       <h2>You're in</h2>
       <p class="success-sub">
         Welcome to the founders list.<br>
-        You'll be the first to receive our launch access, white paper,<br>
-        AMA invitations, and listing alerts.<br>
-        Watch your inbox. The standard is being set.
+        You'll be the first to receive our launch access, white paper, AMA invitations, and listing alerts. Watch your inbox. The standard is being set.
       </p>
       <button id="back-home-btn">Back to Home</button>
     </div>
@@ -241,10 +335,15 @@
   <!-- Select placeholder colour -->
   <script>
     document.querySelectorAll('.form-select').forEach(sel => {
-      sel.addEventListener('change', () => sel.classList.remove('unset'));
+      sel.addEventListener('change', () => {
+        sel.classList.remove('unset');
+        const otherId = sel.id + '-other';
+        const otherEl = document.getElementById(otherId);
+        if (otherEl) otherEl.classList.toggle('visible', sel.value === 'other');
+      });
     });
   </script>
 
-  <script type="module" src="./index.js?v=5"></script>
+  <script type="module" src="./index.js?v=11"></script>
 </body>
 </html>
