@@ -14,7 +14,8 @@
     body { overflow-y: scroll; }
     /* canvas sits above bg-image so particles render over the texture */
     #root { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 2; }
-    canvas { display: block; outline: none !important; }
+    canvas { display: block; outline: none !important; border: none !important; }
+    * { border: 0; }
     #scroll-spacer { height: 400vh; pointer-events: none; }
 
     /* Noise grain — sits below canvas (z:1), Overlay blend on background only, matches Figma */
