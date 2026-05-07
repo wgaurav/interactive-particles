@@ -12,6 +12,8 @@
     * { margin: 0; padding: 0; outline: none !important; box-sizing: border-box; }
     html, body { width: 100%; background: #05050A; border: none; }
     body { overflow-y: scroll; overscroll-behavior: none; }
+    html { scrollbar-width: none; }
+    html::-webkit-scrollbar { display: none; }
     body::before {
       content: ''; position: fixed; top: 0; left: 0; width: 100%; height: 2px;
       background: #05050A; z-index: 9999; pointer-events: none;
@@ -109,15 +111,15 @@
       font-size: clamp(18px, 2vw, 26px); font-weight: 300;
       color: rgba(255,255,255,0.88); letter-spacing: 0.06em; margin-bottom: 28px;
     }
-    #waitlist-form { display: flex; flex-direction: column; gap: 10px; width: min(480px, 90vw); }
+    #waitlist-form { display: flex; flex-direction: column; gap: 10px; width: min(560px, 88vw); }
     .form-row { display: flex; gap: 10px; }
     .form-row > * { flex: 1; min-width: 0; }
 
     .form-input, .form-select {
-      width: 100%;
+      width: 100%; height: 46px; box-sizing: border-box;
       background: rgba(255,255,255,0.05);
       border: 1px solid rgba(255,255,255,0.12);
-      border-radius: 10px; padding: 13px 16px;
+      border-radius: 10px; padding: 0 16px;
       color: rgba(255,255,255,0.80);
       font-family: inherit; font-size: 14px; font-weight: 300; letter-spacing: 0.01em;
       appearance: none; -webkit-appearance: none; transition: border-color 0.2s;
@@ -139,13 +141,13 @@
 
     #submit-btn {
       position: relative;
-      width: 100%; height: 40px; padding: 0;
+      flex: none; width: auto; height: 46px; padding: 0 28px;
       background:
         linear-gradient(135deg, transparent 0%, rgba(251,246,238,0.60) 49%, transparent 100%),
         linear-gradient(147deg, rgba(255,215,153,0.85) 0%, rgba(255,183,69,0.85) 0%, rgba(255,196,100,0.85) 17%, rgba(227,144,14,0.85) 83%);
       border: none; border-radius: 12px;
       color: #05050A; font-family: 'Inter Tight', inherit; font-size: 14px; font-weight: 500;
-      letter-spacing: 0.02em; cursor: pointer; margin-top: 8px;
+      letter-spacing: 0.02em; cursor: pointer; white-space: nowrap;
       box-shadow: 2px 3px 25px rgba(0,0,0,0.20);
       backdrop-filter: blur(20px);
       transition: opacity 0.2s;
@@ -191,7 +193,7 @@
       font-size: clamp(38px, 5vw, 72px);
       font-weight: 400; font-style: normal;
       letter-spacing: -0.02em; line-height: 110%;
-      margin: 0;
+      margin: 0; padding-bottom: 0.12em;
       background:
         linear-gradient(135deg, rgba(251,246,238,0) 0%, rgba(251,246,238,1) 49%, rgba(251,246,238,0) 100%),
         linear-gradient(147deg, rgba(255,215,153,1) 0%, rgba(255,183,69,1) 0%, rgba(255,196,100,1) 17%, rgba(227,144,14,1) 83%);
@@ -227,7 +229,11 @@
     }
 
     @media (max-width: 600px) {
-      .form-row { flex-direction: column; }
+      .form-row { flex-direction: column; gap: 12px; }
+      #waitlist-form { width: 88vw; }
+      .form-input { height: auto; padding: 15px 16px; font-size: 16px; }
+      #submit-btn { flex: none; width: 100%; padding: 14px 0; height: auto; }
+      .form-disclaimer { max-width: 88vw; }
       #text-overlay { bottom: 4%; }
       #text-overlay p { font-size: clamp(38px, 9vw, 56px); }
       #success-overlay h2 { font-size: clamp(36px, 10vw, 52px); }
@@ -273,9 +279,9 @@
   <!-- Noise grain — overlays background only, below canvas -->
   <div id="noise-overlay"></div>
 
-  <!-- "Physical Gold, Digital Access." -->
+  <!-- "Sovereign Gold, Tokenised On-Chain." -->
   <div id="text-overlay">
-    <p>Physical <span class="gold">Gold</span>,<br>Digital Access.</p>
+    <p>Sovereign <span class="gold">Gold</span>,<br>Tokenised On-Chain.</p>
   </div>
 
   <!-- Waitlist form -->
@@ -283,47 +289,25 @@
     <h2>Get Early Access.</h2>
     <form id="waitlist-form" novalidate>
       <div class="form-row">
-        <input class="form-input" type="text"  name="firstName" placeholder="First name*" required>
-        <input class="form-input" type="text"  name="lastName"  placeholder="Last name*"  required>
+        <input class="form-input" type="email" name="email" placeholder="Your email address*" required>
+        <button type="submit" id="submit-btn">Join the Gold Letter</button>
       </div>
-      <div class="form-row">
-        <select class="form-select unset" name="orgType" id="orgType" required>
-          <option value="" disabled selected>Organization type*</option>
-          <option value="hedge-fund">Hedge Fund / Asset Manager</option>
-          <option value="family-office">Family Office</option>
-          <option value="commodity-trader">Commodity Trader</option>
-          <option value="market-maker">Market Maker / OTC Desk</option>
-          <option value="dao">DAO / Protocol Treasury</option>
-          <option value="other">Other</option>
-        </select>
-        <select class="form-select unset" name="interest" id="interest" required>
-          <option value="" disabled selected>Interested in*</option>
-          <option value="trading">Buying / trading TCU29</option>
-          <option value="otc">OTC block trades</option>
-          <option value="liquidity">Providing liquidity / Market making</option>
-          <option value="listing">Exchange listing partnership</option>
-          <option value="other">Other</option>
-        </select>
-      </div>
-      <input class="form-input other-input" type="text" id="orgType-other" name="orgTypeOther" placeholder="Please specify your organization type">
-      <input class="form-input other-input" type="text" id="interest-other" name="interestOther" placeholder="Please specify your interest">
-      <input class="form-input" type="email" name="email" placeholder="Your email address*" required>
-      <button type="submit" id="submit-btn">Join the Gold Letter</button>
     </form>
     <p class="form-disclaimer">
-      By joining the founders list, you'll be part of the first circle of the Palm
-      Global Gold community. We'll come to you first with launch access, AMA
-      invites, listing alerts, and verified audit reports before public release.
+      By joining the founders list, you gain early access to Palm Promax Gold's institutional channel. Members receive launch briefings, attestation reports prior to public release, and direct contact with our investor relations team.
+    </p>
+    <p class="success-footer">
+      Palm Promax Gold ($PPG) is FCA registered, 1:1 gold-backed token built for the way value should move in the digital era. Each token is backed by physical gold held under ADGM/FSRA regulations, with independent transaction oversight from Digital RFQ Limited. No team allocations. No speculative supply. Just gold, on-chain, on your terms.
     </p>
   </div>
 
   <!-- Success state — scroll locked when visible -->
   <div id="success-overlay">
     <div class="success-body">
-      <h2>You're in</h2>
+      <h2>Registered</h2>
       <p class="success-sub">
         Welcome to the founders list.<br>
-        You'll be the first to receive our launch access, white paper, AMA invitations, and listing alerts. Watch your inbox. The standard is being set.
+        You'll be the first to receive our launch access, exclusive product updates, AMA invitations, and listing alerts. Watch your inbox. The new standard is being set.
       </p>
       <button id="back-home-btn">Back to Home</button>
     </div>
@@ -336,18 +320,6 @@
   </div>
 
   <script>window.scrollTo(0, 0);</script>
-
-  <!-- Select placeholder colour -->
-  <script>
-    document.querySelectorAll('.form-select').forEach(sel => {
-      sel.addEventListener('change', () => {
-        sel.classList.remove('unset');
-        const otherId = sel.id + '-other';
-        const otherEl = document.getElementById(otherId);
-        if (otherEl) otherEl.classList.toggle('visible', sel.value === 'other');
-      });
-    });
-  </script>
 
   <script type="module" src="./index.js?v=11"></script>
 </body>

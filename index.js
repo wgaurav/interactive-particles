@@ -13,8 +13,8 @@ const scene = new THREE.Scene();
 const _initAspect = window.innerWidth / window.innerHeight;
 const _initFOV = _initAspect < 1 ? Math.min(75, 40 / _initAspect) : 40;
 const camera = new THREE.PerspectiveCamera(_initFOV, _initAspect, 0.1, 1000);
-camera.position.set(0, isMobile ? 1.2 : 1.8, isMobile ? 5.5 : 4.5);
-camera.lookAt(0, isMobile ? 0.0 : 0.15, 0);
+camera.position.set(0, 1.8, 4.5);
+camera.lookAt(0, 0.15, 0);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 renderer.setClearColor(0x000000, 0); // fully transparent clear
@@ -1422,21 +1422,15 @@ window.addEventListener('mouseleave', () => {
   mouseVelZ = 0;
 });
 
-// ── Touch events (mobile parallax) ──
+// ── Touch events (mouse screen position only — no parallax tilt on mobile) ──
 window.addEventListener('touchmove', (e) => {
   if (e.touches.length > 0) {
     const touch = e.touches[0];
-    targetRotY = ((touch.clientX / window.innerWidth) * 2 - 1) * 0.08;
-    targetRotX = ((touch.clientY / window.innerHeight) * 2 - 1) * 0.05;
     mat.uniforms.uMouseScreen.value.set(
       (touch.clientX / window.innerWidth) * 2 - 1,
       -((touch.clientY / window.innerHeight) * 2 - 1)
     );
   }
-}, { passive: true });
-window.addEventListener('touchend', () => {
-  targetRotY = 0;
-  targetRotX = 0;
 }, { passive: true });
 
 // ── Dust ──
@@ -1477,12 +1471,7 @@ window.addEventListener('scroll', () => {
 // ── Camera scroll keyframes [scrollT, pos, lookAt] ──
 // 4-point sequence:
 //   hold (text visible) → zoom in continuously through full dissolution → pull back for particles/form
-const camKF = isMobile ? [
-  { t: 0.00, p: [0, 1.2, 5.5], l: [0, 0.0,  0] },
-  { t: 0.25, p: [0, 1.2, 5.5], l: [0, 0.0,  0] }, // hold — text visible
-  { t: 0.82, p: [0, 0.5, 2.0], l: [0, 0.0,  0] }, // zoom in all the way through dissolution
-  { t: 1.00, p: [0, 1.2, 6.0], l: [0, 0.0,  0] }, // pull back for particles / form
-] : [
+const camKF = [
   { t: 0.00, p: [0, 1.8, 4.5], l: [0, 0.15, 0] },
   { t: 0.25, p: [0, 1.8, 4.5], l: [0, 0.12, 0] }, // hold — text visible
   { t: 0.82, p: [0, 0.6, 1.6], l: [0, 0.00, 0] }, // zoom in all the way through dissolution
@@ -1828,6 +1817,7 @@ document.getElementById('waitlist-form')?.addEventListener('submit', (e) => {
   const formEl = document.getElementById('form-container');
   const succEl = document.getElementById('success-overlay');
 
+  btn.style.width = btn.offsetWidth + 'px';
   btn.textContent = 'Joining…';
   btn.disabled = true;
 
