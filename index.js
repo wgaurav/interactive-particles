@@ -581,7 +581,7 @@ const vertexShader = `
     // Fade starts earlier and compresses into a shorter scroll window so
     // the mid-scroll cloud is noticeably thinner and the circle stage is sparse
     float fadeT = max(0.0, (uScrollT - 0.45) / 0.38);
-    float survivorThreshold = 0.03;
+    float survivorThreshold = 0.055;
     float netAlpha = 1.0;
     if (aSeed >= survivorThreshold) {
       float relSeed = (aSeed - survivorThreshold) / (1.0 - survivorThreshold);
@@ -622,7 +622,7 @@ const vertexShader = `
     vec4 mv = modelViewMatrix * vec4(p, 1.0);
 
     // Size: variety and fade grow continuously with spread
-    float starSz = 0.6 + aSeed * 1.4;
+    float starSz = 0.7 + aSeed * 1.6;
     float netSizeMult = mix(1.0, starSz * netAlpha, spreadT);
     gl_PointSize = uPointBase * uPixelRatio * sizeMult * netSizeMult;
 
@@ -882,15 +882,14 @@ const fragmentShader = `
     float ow4 = snoise(vec3(wp.x * 3.2 - t * 0.9, wp.z * 3.2 + t * 1.2, wp.y * 2.5 + t * 0.675));
     float ow5 = snoise(vec3(wp.y * 3.5 + t * 1.05, wp.x * 2.3 - t * 0.75, wp.z * 2.8 - t * 0.525));
     float oceanMix    = (ow1 * 1.0 + ow2 * 0.9 + ow3 * 0.8 + ow4 * 1.3 + ow5 * 1.0) / 3.5;
-    float oceanBiased = pow(clamp(oceanMix * 0.5 + 0.5, 0.0, 1.0), 0.45);
+    float oceanBiased = pow(clamp(oceanMix * 0.5 + 0.5, 0.0, 1.0), 0.52);
     float oceanShadow = clamp(mix(0.36, 1.20, oceanBiased), 0.36, 1.20);
     float shadowDepth = smoothstep(0.70, 0.25, oceanShadow);
-    float finalOcean  = oceanShadow * (1.0 - shadowDepth * (0.32 + 0.12 * sin(t * 0.1)));
-    float shadowContrast = mix(0.82, 1.0, smoothstep(0.36, 0.72, finalOcean));
-    col *= mix(1.0, finalOcean * shadowContrast, 0.82);
+    float breathingDarken = 0.28 + 0.10 * sin(t * 0.1);
+    float finalOcean  = oceanShadow * (1.0 - shadowDepth * breathingDarken);
+    float shadowContrast = mix(0.82, 1.0, smoothstep(0.30, 0.75, finalOcean));
+    col *= finalOcean * shadowContrast;
     col = max(col, deepShadow * 0.85);
-
-    col = max(col, deepShadow * 0.90);
     col = clamp(col, 0.0, 1.0);
 
     // ── Traveling interior wave — light from inside through particle gaps ────
@@ -1012,7 +1011,7 @@ const logoFragShader = `
     float barWaveTime = mod(uTime, barCycleDuration);
     float logoFadeIn  = smoothstep(8.0, 10.0, barWaveTime);
     float logoFadeOut = 1.0 - smoothstep(29.0, 32.0, barWaveTime);
-    float logoActivation = logoFadeIn * logoFadeOut;
+    float logoActivation = logoFadeIn * logoFadeOut * uIntroGlow;
 
     vec2 centered = vUv - vec2(0.5);
     float distFromCenter = length(centered);
@@ -1064,7 +1063,6 @@ const logoFragShader = `
     vec3 shineColor = mix(vec3(0.95, 0.82, 0.45), vec3(1.0, 0.97, 0.90), smoothstep(0.3, 0.9, totalShine));
 
     vec3 finalCol = baseCol + shineColor * totalShine * 0.80;
-    finalCol = mix(finalCol, finalCol * 1.55 + vec3(0.22, 0.15, 0.03), uIntroGlow);
     gl_FragColor = vec4(clamp(finalCol, 0.0, 1.0), texel.a * 0.95 * uOpacity);
   }
 `;
@@ -1724,12 +1722,9 @@ function animate() {
   const logoFadeOut = 1 - Math.max(0, Math.min(1, (smoothScrollT - 0.42) / 0.13));
   logoMat.uniforms.uOpacity.value = logoFadeIn * logoFadeOut;
   logoMesh.visible = logoMat.uniforms.uOpacity.value > 0.001;
-  // Glow: fades out after intro, then smoothly rises again as camera zooms in on scroll
-  const postIntroT  = Math.max(0, t - 2.8);
-  const baseGlow    = isIntroPhase ? crossfade : Math.max(0, 1.0 - postIntroT / 2.0);
-  const scrollGlow  = Math.max(0, Math.min(1, (smoothScrollT - 0.22) / 0.22));
-  const introGlow   = Math.min(1.0, baseGlow + scrollGlow * 0.80);
-  logoMat.uniforms.uIntroGlow.value = introGlow;
+  // Ring animation fades out as user begins scrolling, before camera zooms in
+  const ringFade = 1.0 - Math.max(0, Math.min(1, (smoothScrollT - 0.08) / 0.18));
+  logoMat.uniforms.uIntroGlow.value = ringFade;
 
   // Crack: assembles during intro (fading out as logo fades in), disintegrates on scroll
   const crackProgress = Math.max(0, Math.min(1, (smoothScrollT - 0.42) / 0.36));
