@@ -594,8 +594,8 @@ const vertexShader = `
     float scrollSizeMod = 1.0 - spreadT * spreadT * 0.25;
 
     float mouseDist = length(p - uMouse);
-    float sizeInfluence = 1.0 - smoothstep(0.0, 0.55, mouseDist);
-    float sizeMult = scrollSizeMod;
+    float sizeInfluence = 1.0 - smoothstep(0.0, 0.40, mouseDist);
+    float sizeMult = scrollSizeMod * (1.0 + sizeInfluence * uMouseActive);
 
     vec3 lightDir1 = normalize(vec3(
       sin(uTime * 0.15) * 0.6, 0.8, cos(uTime * 0.2) * 0.5 + 0.3
@@ -610,7 +610,7 @@ const vertexShader = `
     vWorldPos = p;
     vNormal = aNormal;
     vLogoEdge = aLogoEdge;
-    vMouseProx = (1.0 - smoothstep(0.0, 0.45, mouseDist)) * uMouseActive;
+    vMouseProx = (1.0 - smoothstep(0.0, 0.40, mouseDist)) * uMouseActive;
 
     // Intro assembly: bar starts expanded 4x from its center and contracts inward.
     // All particles move in the same direction (toward bar center) — no crossing paths.
@@ -637,6 +637,7 @@ const fragmentShader = `
   uniform float uMouseActive;
   uniform float uScrollT;
   uniform vec2 uMouseScreen;
+  uniform vec3 uMouse;
   varying float vLight;
   varying float vSeed;
   varying float vBright;
@@ -816,109 +817,22 @@ const fragmentShader = `
     float gradCurve2 = gradNorm2 * gradNorm2 * (3.0 - 2.0 * gradNorm2);
     float spatialGradient = mix(0.06, 0.28, gradCurve) + gradCurve2 * 0.09;
 
-    // Slow rolling reflection bands — simulate overhead light sweeping across the bar
-    float roll1 = exp(-pow(wp.x - sin(t * 0.06) * 1.3, 2.0) * 2.2) * 0.72;
-    float roll2 = exp(-pow(wp.z - cos(t * 0.04) * 0.38, 2.0) * 4.5) * 0.45;
-    float roll3 = exp(-pow(wp.x + cos(t * 0.08 + 1.4) * 0.9, 2.0) * 3.2) * 0.40;
-    float rolling = clamp(roll1 + roll2 + roll3, 0.0, 0.90);
-
-    // ── Traveling sweep wave (bright → dark → bright, OMMA-style) ──────────
-    // Primary gradient — one full wave wider than the bar, so you see one smooth
-    // dark-to-bright gradient at a time (Morpho-style half-lit hemisphere look)
-    float sweepAxis  = wp.x * 0.75 + wp.z * 0.42;
-    float sweepPhase = sweepAxis * 1.5 - t * 0.55;
-    float sweep      = 0.5 + 0.5 * sin(sweepPhase);   // smooth gradient, no smoothstep
-
-    // Secondary wave adds organic variety without sharp banding
-    float sweepAxis2  = wp.x * (-0.45) + wp.z * 0.88;
-    float sweepPhase2 = sweepAxis2 * 1.2 - t * 0.34;
-    float sweep2      = 0.5 + 0.5 * sin(sweepPhase2);
-    sweep = mix(sweep, sweep2, 0.28);
-
-    float sweepHighlight = sweep * sweep * 0.80;
-    float sweepShadow    = (1.0 - sweep) * (1.0 - sweep) * 0.14;
-    float sweepNet       = sweepHighlight - sweepShadow;
-    // ── end sweep ──────────────────────────────────────────────────────────
-
-    // ── Idle shimmer wave (default / no-cursor state) ───────────────────────
-    // Two wave fronts sweep the bar. Wide per-particle seed jitter means
-    // adjacent particles respond at different times — individual particle
-    // pulses rather than a uniform band. Outside the wave: particles darken
-    // deeply so the lit zone creates real contrast.
-
-    // Wave 1 — diagonal NE, ~9 s cycle
-    float shimAxis1  = wp.x * 0.82 + wp.z * 0.32;
-    float shimFront1 = mix(-1.8, 1.8, mod(t * 0.110, 1.0));
-    float shimSeed1  = (vSeed - 0.5) * 0.85;            // wide jitter = organic scatter
-    float shimGlow1  = exp(-pow(shimAxis1 + shimSeed1 - shimFront1, 2.0) * 4.8);
-
-    // Wave 2 — diagonal NW, ~13 s cycle, half-phase offset so one is always crossing
-    float shimAxis2  = wp.x * (-0.55) + wp.z * 0.72;
-    float shimFront2 = mix(-1.4, 1.4, mod(t * 0.077 + 0.5, 1.0));
-    float shimSeed2  = (fract(vSeed * 5.17 + 0.23) - 0.5) * 0.80;
-    float shimGlow2  = exp(-pow(shimAxis2 + shimSeed2 - shimFront2, 2.0) * 4.2) * 0.88;
-
-    float idleShimmer = clamp(shimGlow1 + shimGlow2, 0.0, 1.0);
-    float idleBlend   = 1.0 - uMouseActive;   // fades out when cursor becomes active
-    // ── end idle shimmer ────────────────────────────────────────────────────
-
-    // ── Dynamic mouse/auto-orbit light ──────────────────────────────────────
-    // When cursor is anywhere on screen: directional light follows it, making
-    // whichever side the cursor is on glow brighter — the "lighting changes on
-    // hover" effect from Morpho.
-    // When cursor is idle: a gentle light slowly orbits on its own so the bar
-    // is never fully static — the "internal moving shadow/glow" effect.
-    vec3 autoOrbitDir = normalize(vec3(
-      sin(t * 0.07) * 1.6,
-      0.6 + sin(t * 0.04 + 1.0) * 0.5,
-      1.8 + cos(t * 0.05) * 0.9
-    ));
-    vec3 mouseLightDir = normalize(vec3(uMouseScreen.x * 2.0, uMouseScreen.y * 1.6, 2.0));
-    vec3 dynDir = normalize(mix(autoOrbitDir, mouseLightDir, uMouseActive));
-
-    float dynDiff = max(dot(N, dynDir), 0.0);
-    vec3 halfDyn  = normalize(dynDir + viewDir);
-    float dynSpec = pow(max(dot(N, halfDyn), 0.0), 28.0);
-    float dynLight = dynDiff * 0.55 + dynSpec * 0.35;
-    // ── end dynamic light ───────────────────────────────────────────────────
-
-    float metalGradient = clamp(0.62 + ambientGrad * 0.22 + brightWave - darkEdge + surfaceNoise + darkShine + brushedEffect + sunTotal + brightBoost + glint + rolling + dynLight + sweepNet + spatialGradient + vLogoEdge * 0.18, 0.0, 1.0);
+    float metalGradient = clamp(0.42 + ambientGrad * 0.18 + brightWave - darkEdge + surfaceNoise + darkShine + brushedEffect + sunTotal + brightBoost + glint + spatialGradient, 0.0, 1.0);
 
     vec3 col = mix(deepShadow, darkGold,   smoothstep(0.00, 0.10, metalGradient));
-    col = mix(col, shadowGold,             smoothstep(0.08, 0.20, metalGradient));
-    col = mix(col, richGold,               smoothstep(0.18, 0.32, metalGradient));
-    col = mix(col, midGold,                smoothstep(0.28, 0.42, metalGradient));
-    col = mix(col, classicGold,            smoothstep(0.38, 0.52, metalGradient));
-    col = mix(col, warmGold,               smoothstep(0.48, 0.63, metalGradient));
-    col = mix(col, brightGold,             smoothstep(0.55, 0.70, metalGradient));
-    col = mix(col, whiteShine,             smoothstep(0.63, 0.80, metalGradient));
-    col = mix(col, pureWhite,              smoothstep(0.75, 1.00, metalGradient));
+    col = mix(col, shadowGold,             smoothstep(0.08, 0.22, metalGradient));
+    col = mix(col, richGold,               smoothstep(0.20, 0.35, metalGradient));
+    col = mix(col, midGold,                smoothstep(0.32, 0.46, metalGradient));
+    col = mix(col, classicGold,            smoothstep(0.43, 0.57, metalGradient));
+    col = mix(col, warmGold,               smoothstep(0.54, 0.68, metalGradient));
+    col = mix(col, brightGold,             smoothstep(0.65, 0.78, metalGradient));
+    col = mix(col, whiteShine,             smoothstep(0.75, 0.88, metalGradient));
+    col = mix(col, pureWhite,              smoothstep(0.86, 1.00, metalGradient));
 
     float roseFactor = smoothstep(0.28, 0.50, metalGradient) * (1.0 - smoothstep(0.58, 0.72, metalGradient)) * 0.18;
     col = mix(col, roseGold, roseFactor);
     col = mix(col, brightGold, pow(clamp(waveCombined, 0.0, 1.0), 1.5) * 0.35);
     col = mix(col, whiteShine, pow(clamp(waveCombined, 0.0, 1.0), 3.0) * 0.20);
-
-    // ── Sweep color temperature (Morpho-style) ─────────────────────────────
-    // Trough: deep shadow — near-black in dark zone for dramatic contrast
-    col *= mix(0.15, 1.0, sweep);
-    // Crest: push base color toward warm white-gold
-    col = mix(col, whiteShine, sweep * sweep * 0.58);
-    // Bright particles in the lit zone flare up — the "gap" texture visible in light
-    col = mix(col, warmGold,   vBright * sweep * sweep * 0.62);
-    col = mix(col, brightGold, vBright * pow(sweep, 3.0) * 0.55);
-    col = mix(col, whiteShine, vBright * pow(sweep, 4.0) * 0.38);
-
-    // Idle shimmer — darken base heavily so wave contrast is dramatic,
-    // then layer warm amber → gold → highlight on the lit zone.
-    vec3 deepAmber = vec3(0.88, 0.55, 0.05);
-    float shimmerOn = idleShimmer * idleBlend;
-    // Darken everything outside the wave; restore to full as wave arrives
-    col *= mix(1.0, mix(0.32, 1.0, idleShimmer), idleBlend);
-    col = mix(col, deepAmber,  shimmerOn * 0.78);
-    col = mix(col, warmGold,   shimmerOn * shimmerOn * 0.88);
-    col = mix(col, brightGold, pow(shimmerOn, 2.5) * 0.78);
-    col = mix(col, whiteShine, pow(shimmerOn, 3.5) * 0.52);
 
     float yNorm = clamp((wp.y + 0.234) / 0.468, 0.0, 1.0);
     float edgeHalfW = mix(1.3, 1.092, yNorm);
@@ -962,21 +876,19 @@ const fragmentShader = `
 
     // Ocean shadow waves — chaotic multi-directional interference (OMMA-style)
     // Applied here so hover/internal-light effects layer cleanly on top
-    float ow1 = sin((wp.y * 1.2 + wp.x * 0.3) * 6.5 + t * 6.5);
-    float ow2 = sin((wp.z * 1.3 + wp.x * -0.4) * 7.0 + t * 7.2);
-    float ow3 = sin((wp.x * 0.7 + wp.y * 0.9 + wp.z * 0.5) * 6.8 - t * 5.8);
-    float ow4 = snoise(vec3(wp.x * 3.2 - t * 1.4, wp.z * 3.2 + t * 1.9, wp.y * 2.5 + t * 1.1));
-    float ow5 = snoise(vec3(wp.y * 3.5 + t * 1.7, wp.x * 2.3 - t * 1.2, wp.z * 2.8 - t * 0.9));
+    float ow1 = sin((wp.y * 1.2 + wp.x * 0.3) * 6.5 + t * 4.125);
+    float ow2 = sin((wp.z * 1.3 + wp.x * -0.4) * 7.0 + t * 4.5);
+    float ow3 = sin((wp.x * 0.7 + wp.y * 0.9 + wp.z * 0.5) * 6.8 - t * 3.75);
+    float ow4 = snoise(vec3(wp.x * 3.2 - t * 0.9, wp.z * 3.2 + t * 1.2, wp.y * 2.5 + t * 0.675));
+    float ow5 = snoise(vec3(wp.y * 3.5 + t * 1.05, wp.x * 2.3 - t * 0.75, wp.z * 2.8 - t * 0.525));
     float oceanMix    = (ow1 * 1.0 + ow2 * 0.9 + ow3 * 0.8 + ow4 * 1.3 + ow5 * 1.0) / 3.5;
     float oceanBiased = pow(clamp(oceanMix * 0.5 + 0.5, 0.0, 1.0), 0.45);
-    float oceanShadow = clamp(mix(0.28, 1.25, oceanBiased), 0.28, 1.25);
+    float oceanShadow = clamp(mix(0.36, 1.20, oceanBiased), 0.36, 1.20);
     float shadowDepth = smoothstep(0.70, 0.25, oceanShadow);
     float finalOcean  = oceanShadow * (1.0 - shadowDepth * (0.32 + 0.12 * sin(t * 0.1)));
-    float shadowContrast = mix(0.80, 1.0, smoothstep(0.28, 0.72, finalOcean));
+    float shadowContrast = mix(0.82, 1.0, smoothstep(0.36, 0.72, finalOcean));
     col *= mix(1.0, finalOcean * shadowContrast, 0.82);
     col = max(col, deepShadow * 0.85);
-
-    // Morpho hover: purely physical repel — no color change on the particles
 
     col = max(col, deepShadow * 0.90);
     col = clamp(col, 0.0, 1.0);
@@ -997,29 +909,6 @@ const fragmentShader = `
     col = mix(col, whiteShine, vBright * tWvTotal * tWvTotal * tWvTotal * 0.48);
     col *= 1.0 - (1.0 - vBright) * tWvTotal * 0.30;
     // ── end traveling wave ───────────────────────────────────────────────────
-
-    // ── Internal moving point light ────────────────────────────────────────
-    // A bright orb moves inside the bar volume. Particles close to it flare
-    // to near-white, simulating light leaking through particle gaps.
-    // Auto-orbits slowly when idle; shifts with mouse position when active.
-    vec3 autoIntPos = vec3(
-      sin(t * 0.38) * 1.05,
-      -0.02 + sin(t * 0.26 + 1.1) * 0.14,
-      cos(t * 0.31) * 0.24
-    );
-    vec3 mouseIntPos = vec3(uMouseScreen.x * 1.15, uMouseScreen.y * 0.15, 0.15);
-    vec3 intLightPos = mix(autoIntPos, mouseIntPos, uMouseActive);
-
-    float intDist      = length(wp - intLightPos);
-    float intGlow      = exp(-intDist * intDist * 2.8);
-    float intGlowSharp = exp(-intDist * intDist * 12.0);
-    float intTotal     = intGlow * 0.55 + intGlowSharp * 0.90;
-
-    // Selective: bright particles (gaps) flare strongly; dark ones absorb
-    float intSelectivity = vBright * 1.0 + (1.0 - vBright) * 0.28;
-    vec3 intCol = mix(vec3(0.95, 0.84, 0.42), vec3(0.98, 0.88, 0.55), intGlowSharp);
-    col = mix(col, intCol, clamp(intTotal * 0.55 * intSelectivity, 0.0, 0.70));
-    // ── end internal light ─────────────────────────────────────────────────
 
     // Per-dot sphere shading — warm highlight at center, dims toward edge
     float dotLift = max(0.40 - d, 0.0) * 2.80;
@@ -1056,7 +945,7 @@ const mat = new THREE.ShaderMaterial({
     uMouseActive: { value: 0 },
     uMouseScreen: { value: new THREE.Vector2(0, 0) },
     uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) },
-    uPointBase:  { value: isMobile ? 1.3 : 2.5 },
+    uPointBase:  { value: isMobile ? 1.3 : 2.6 },
     uIntroT: { value: 0 },
     uScrollT: { value: 0 },
     uIntroExpand:  { value: isMobile ? 1.0 : 4.2 },
@@ -1740,10 +1629,12 @@ function animate() {
   const dt = Math.min(t - lastTime, 0.033);
   lastTime = t;
 
-  const influenceRadius = 0.45;
+  const influenceRadius = 0.40;
+  const swirlStrength   = 16.0;
+  const attractStrength = 5.0;
   const springK         = 5.0;
-  const damping         = 4.0;
-  const maxDisp         = 0.10;
+  const damping         = 3.5;
+  const maxDisp         = 0.22;
 
   if (!isMobile) for (let i = 0; i < PARTICLE_COUNT; i++) {
     const i3 = i * 3;
@@ -1757,12 +1648,24 @@ function animate() {
       const toMouseZ = mouseLocal.z - (oz + dz);
       const dist = Math.sqrt(toMouseX*toMouseX + toMouseY*toMouseY + toMouseZ*toMouseZ);
       if (dist < influenceRadius && dist > 0.001) {
-        // Morpho-style: radial repel outward from cursor — creates a smooth void
-        const falloff = Math.pow(1.0 - dist / influenceRadius, 2);
+        const t_norm = 1.0 - dist / influenceRadius;
+        const falloff = t_norm * t_norm;
+        // Swirl: cross(toMouse, faceNormal) — surface-aware vortex direction
+        const nx = norms[i3], ny = norms[i3+1], nz = norms[i3+2];
+        const swirlX = toMouseY * nz - toMouseZ * ny;
+        const swirlY = toMouseZ * nx - toMouseX * nz;
+        const swirlZ = toMouseX * ny - toMouseY * nx;
+        const swirlLen = Math.sqrt(swirlX*swirlX + swirlY*swirlY + swirlZ*swirlZ);
+        if (swirlLen > 0.0001) {
+          fx += (swirlX / swirlLen) * swirlStrength * falloff;
+          fy += (swirlY / swirlLen) * swirlStrength * falloff;
+          fz += (swirlZ / swirlLen) * swirlStrength * falloff;
+        }
+        // Gentle attraction pulls particles into the vortex center
         const invDist = 1.0 / dist;
-        fx -= toMouseX * invDist * 4.5 * falloff;
-        fy -= toMouseY * invDist * 4.5 * falloff;
-        fz -= toMouseZ * invDist * 4.5 * falloff;
+        fx += toMouseX * invDist * attractStrength * falloff * 0.3;
+        fy += toMouseY * invDist * attractStrength * falloff * 0.3;
+        fz += toMouseZ * invDist * attractStrength * falloff * 0.3;
       }
     }
 
