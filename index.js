@@ -147,7 +147,7 @@ const faceData = faces.map(f => {
   return { ...f, area };
 });
 
-const BASE_PARTICLE_COUNT = isMobile ? 5000 : 15000;
+const BASE_PARTICLE_COUNT = isMobile ? 8000 : 22000;
 
 const edges = [
   [corners.b0, corners.b1], [corners.b1, corners.b2],
@@ -390,7 +390,7 @@ function getCellKey(i) {
 }
 
 for (let i = 0; i < PARTICLE_COUNT; i++) {
-  flowFlag[i] = (seeds[i] < 0.345) ? 1.0 : 0.0;
+  flowFlag[i] = (seeds[i] < 0.50) ? 1.0 : 0.0;
   const key = getCellKey(i);
   if (!cellCounts[key]) { cellCounts[key] = 0; cellBrights[key] = 0; }
   cellCounts[key]++;
@@ -524,7 +524,7 @@ const vertexShader = `
     vec3 tang2 = normalize(cross(aNormal, tang1));
 
     if (aFlow > 0.5) {
-      float flowSpeed = 0.022 + aSeed * 0.010;
+      float flowSpeed = 0.075 + aSeed * 0.038;
       float flowCycle = mod(t * flowSpeed + aSeed * 10.0, 1.0);
       float topY = 0.234;
       float botY = -0.234;
@@ -836,7 +836,7 @@ const fragmentShader = `
     sweep = mix(sweep, sweep2, 0.28);
 
     float sweepHighlight = sweep * sweep * 0.80;
-    float sweepShadow    = (1.0 - sweep) * (1.0 - sweep) * 0.65;
+    float sweepShadow    = (1.0 - sweep) * (1.0 - sweep) * 0.14;
     float sweepNet       = sweepHighlight - sweepShadow;
     // ── end sweep ──────────────────────────────────────────────────────────
 
@@ -882,7 +882,7 @@ const fragmentShader = `
     float dynLight = dynDiff * 0.55 + dynSpec * 0.35;
     // ── end dynamic light ───────────────────────────────────────────────────
 
-    float metalGradient = clamp(0.46 + ambientGrad * 0.22 + brightWave - darkEdge + surfaceNoise + darkShine + brushedEffect + sunTotal + brightBoost + glint + rolling + dynLight + sweepNet + spatialGradient + vLogoEdge * 0.18, 0.0, 1.0);
+    float metalGradient = clamp(0.62 + ambientGrad * 0.22 + brightWave - darkEdge + surfaceNoise + darkShine + brushedEffect + sunTotal + brightBoost + glint + rolling + dynLight + sweepNet + spatialGradient + vLogoEdge * 0.18, 0.0, 1.0);
 
     vec3 col = mix(deepShadow, darkGold,   smoothstep(0.00, 0.10, metalGradient));
     col = mix(col, shadowGold,             smoothstep(0.08, 0.20, metalGradient));
@@ -1056,7 +1056,7 @@ const mat = new THREE.ShaderMaterial({
     uMouseActive: { value: 0 },
     uMouseScreen: { value: new THREE.Vector2(0, 0) },
     uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) },
-    uPointBase:  { value: isMobile ? 2.0 : 3.2 },
+    uPointBase:  { value: isMobile ? 1.3 : 2.5 },
     uIntroT: { value: 0 },
     uScrollT: { value: 0 },
     uIntroExpand:  { value: isMobile ? 1.0 : 4.2 },
