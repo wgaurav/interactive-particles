@@ -1545,7 +1545,7 @@ function drawRings(t, sst, successMode = false) {
       overlayCtx.beginPath();
       overlayCtx.arc(x, y, circR, 0, Math.PI * 2);
       overlayCtx.fillStyle = successMode
-        ? `rgba(22,18,14,${alpha * 0.88})`
+        ? `rgba(6,4,2,${alpha * 0.97})`
         : `rgba(74,71,67,${alpha * 0.18})`;
       overlayCtx.fill();
 
