@@ -1007,11 +1007,8 @@ const logoFragShader = `
 
     vec3 baseCol = texel.rgb;
 
-    float barCycleDuration = 32.0;
-    float barWaveTime = mod(uTime, barCycleDuration);
-    float logoFadeIn  = smoothstep(8.0, 10.0, barWaveTime);
-    float logoFadeOut = 1.0 - smoothstep(29.0, 32.0, barWaveTime);
-    float logoActivation = logoFadeIn * logoFadeOut * uIntroGlow;
+    // Scroll-driven glow + small baseline so gold reads correctly on the brick when uIntroGlow has faded
+    float logoActivation = max(uIntroGlow, 0.2);
 
     vec2 centered = vUv - vec2(0.5);
     float distFromCenter = length(centered);
@@ -1027,15 +1024,14 @@ const logoFragShader = `
     alphaSum += texture2D(uLogoMap, vUv + vec2( sampleStep, -sampleStep)).a;
     alphaSum += texture2D(uLogoMap, vUv + vec2(-sampleStep, -sampleStep)).a;
 
-    float logoPulseDuration = 7.0;
-    float logoWindowTime = max(barWaveTime - 10.0, 0.0);
-    float pulseProgress  = mod(logoWindowTime, logoPulseDuration) / logoPulseDuration;
-    float easedWave = pulseProgress * pulseProgress * (3.0 - 2.0 * pulseProgress);
+    // Seamless cosine oscillation — no modulo reset, slower and smoother
+    float logoPulseDuration = 16.0;
+    float easedWave = 0.5 - 0.5 * cos(uTime * 6.2832 / logoPulseDuration);
 
     float ringPos  = mix(0.55, 0.0, easedWave);
     float ringDist = abs(distFromCenter - ringPos);
-    float ringSharp = exp(-ringDist * ringDist * 600.0) * 1.2;
-    float ringGlow  = exp(-ringDist * ringDist *  80.0) * 0.55;
+    float ringSharp = exp(-ringDist * ringDist * 600.0) * 1.0;
+    float ringGlow  = exp(-ringDist * ringDist *  80.0) * 0.45;
 
     float sStep2 = mix(0.04, 0.005, easedWave);
     float a2 = (
@@ -1044,25 +1040,25 @@ const logoFragShader = `
       texture2D(uLogoMap, vUv + vec2(0.0,  sStep2)).a +
       texture2D(uLogoMap, vUv + vec2(0.0, -sStep2)).a
     ) / 4.0;
-    float edgeWaveIntensity = (1.0 - smoothstep(0.0, 0.2, a2 - 0.1)) * smoothstep(0.0, 0.3, easedWave) * 0.6;
+    float edgeWaveIntensity = (1.0 - smoothstep(0.0, 0.2, a2 - 0.1)) * smoothstep(0.0, 0.3, easedWave) * 0.5;
 
-    float n1 = noise2D(vUv * 22.0 + vec2(uTime * 1.8, 0.0));
-    float n2 = noise2D(vUv * 33.0 + vec2(0.0, uTime * 1.2));
+    float n1 = noise2D(vUv * 22.0 + vec2(uTime * 0.9, 0.0));
+    float n2 = noise2D(vUv * 33.0 + vec2(0.0, uTime * 0.7));
     float sparkleGlint = smoothstep(0.5, 0.72, n1 * n2) * 0.5
       * smoothstep(0.08, 0.0, ringDist) * 2.0
-      * (0.5 + 0.5 * sin(uTime * 4.0 + n1 * 15.0));
+      * (0.5 + 0.5 * sin(uTime * 2.0 + n1 * 15.0));
 
-    float centerFlash2 = smoothstep(0.85, 1.0, easedWave) * smoothstep(0.12, 0.0, distFromCenter) * 0.7
+    float centerFlash2 = smoothstep(0.85, 1.0, easedWave) * smoothstep(0.12, 0.0, distFromCenter) * 0.6
       * (1.0 - smoothstep(0.92, 1.0, easedWave));
 
-    vec3 viewDir = normalize(vec3(0.0, 1.8, 4.5) - vWorldPos);
+    vec3 viewDir = normalize(vec3(0.0, 0.0, 3.0) - vWorldPos);
     float fresnel = pow(1.0 - max(dot(normalize(vNormal), viewDir), 0.0), 3.0);
     float edgeShimmer = fresnel * 0.08;
 
     float totalShine = (ringSharp + ringGlow + edgeWaveIntensity + sparkleGlint + centerFlash2) * logoActivation + edgeShimmer;
     vec3 shineColor = mix(vec3(0.95, 0.82, 0.45), vec3(1.0, 0.97, 0.90), smoothstep(0.3, 0.9, totalShine));
 
-    vec3 finalCol = baseCol + shineColor * totalShine * 0.80;
+    vec3 finalCol = baseCol + shineColor * totalShine;
     gl_FragColor = vec4(clamp(finalCol, 0.0, 1.0), texel.a * 0.95 * uOpacity);
   }
 `;
@@ -1553,34 +1549,43 @@ function drawRings(t, sst, successMode = false) {
         : `rgba(74,71,67,${alpha * 0.18})`;
       overlayCtx.fill();
 
-      // Subtle inner glow
-      const radFill = overlayCtx.createRadialGradient(x, y, 0, x, y, circR);
-      radFill.addColorStop(0, `rgba(255,255,255,${alpha * (successMode ? 0.04 : 0.05)})`);
-      radFill.addColorStop(1, `rgba(255,255,255,0)`);
-      overlayCtx.beginPath();
-      overlayCtx.arc(x, y, circR, 0, Math.PI * 2);
-      overlayCtx.fillStyle = radFill;
-      overlayCtx.fill();
+      // Subtle inner glow — skip on mobile (expensive radial gradient)
+      if (!isMobile) {
+        const radFill = overlayCtx.createRadialGradient(x, y, 0, x, y, circR);
+        radFill.addColorStop(0, `rgba(255,255,255,${alpha * (successMode ? 0.04 : 0.05)})`);
+        radFill.addColorStop(1, `rgba(255,255,255,0)`);
+        overlayCtx.beginPath();
+        overlayCtx.arc(x, y, circR, 0, Math.PI * 2);
+        overlayCtx.fillStyle = radFill;
+        overlayCtx.fill();
+      }
 
       // Gold ring stroke
-      const gAngle = angle + Math.PI * 0.25;
-      const strokeGrad = overlayCtx.createLinearGradient(
-        x + Math.cos(gAngle) * circR, y + Math.sin(gAngle) * circR,
-        x - Math.cos(gAngle) * circR, y - Math.sin(gAngle) * circR
-      );
       const strokeAlpha = successMode ? alpha * 0.55 : alpha * 0.35;
-      strokeGrad.addColorStop(0,   `rgba(244,208,88,${strokeAlpha})`);
-      strokeGrad.addColorStop(0.5, `rgba(255,213,60,${strokeAlpha * 0.65})`);
-      strokeGrad.addColorStop(1,   `rgba(255,247,218,${strokeAlpha * 0.35})`);
-
-      overlayCtx.shadowBlur  = circR * (successMode ? 0.6 : 0.4);
-      overlayCtx.shadowColor = `rgba(244,208,88,${alpha * (successMode ? 0.14 : 0.08)})`;
+      let strokeStyle;
+      if (isMobile) {
+        // Flat gold stroke — no gradient, no shadow (eliminates stutter)
+        strokeStyle = `rgba(244,208,88,${strokeAlpha})`;
+      } else {
+        const gAngle = angle + Math.PI * 0.25;
+        const strokeGrad = overlayCtx.createLinearGradient(
+          x + Math.cos(gAngle) * circR, y + Math.sin(gAngle) * circR,
+          x - Math.cos(gAngle) * circR, y - Math.sin(gAngle) * circR
+        );
+        strokeGrad.addColorStop(0,   `rgba(244,208,88,${strokeAlpha})`);
+        strokeGrad.addColorStop(0.5, `rgba(255,213,60,${strokeAlpha * 0.65})`);
+        strokeGrad.addColorStop(1,   `rgba(255,247,218,${strokeAlpha * 0.35})`);
+        strokeStyle = strokeGrad;
+        overlayCtx.shadowBlur  = circR * (successMode ? 0.6 : 0.4);
+        overlayCtx.shadowColor = `rgba(244,208,88,${alpha * (successMode ? 0.14 : 0.08)})`;
+      }
 
       overlayCtx.beginPath();
       overlayCtx.arc(x, y, circR, 0, Math.PI * 2);
-      overlayCtx.strokeStyle = strokeGrad;
+      overlayCtx.strokeStyle = strokeStyle;
       overlayCtx.lineWidth   = Math.max(1.0, circR * (successMode ? 0.030 : 0.035));
       overlayCtx.stroke();
+      overlayCtx.shadowBlur = 0;
 
       // Logo
       const logo = ringLogos[ring.ri][i];
@@ -1613,7 +1618,7 @@ let lastTime = 0;
 
 function animate() {
   const t = clock.getElapsedTime();
-  const dt = Math.min(t - lastTime, 0.033);
+  const dt = Math.min(t - lastTime, isMobile ? 0.020 : 0.033);
   lastTime = t;
 
   const influenceRadius = 0.40;
