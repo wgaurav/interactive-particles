@@ -143,8 +143,8 @@
       position: relative; overflow: hidden;
       flex: none; width: auto; height: 46px; padding: 0 28px;
       background:
-        linear-gradient(135deg, transparent 0%, rgba(251,246,238,0.60) 49%, transparent 100%),
-        linear-gradient(147deg, rgba(255,215,153,0.85) 0%, rgba(255,183,69,0.85) 0%, rgba(255,196,100,0.85) 17%, rgba(227,144,14,0.85) 83%);
+        linear-gradient(135deg, rgba(251,246,238,0) 0%, rgba(251,246,238,1) 49%, rgba(251,246,238,0) 100%),
+        linear-gradient(147deg, rgba(255,215,153,1) 0%, rgba(255,183,69,1) 0%, rgba(255,196,100,1) 17%, rgba(227,144,14,1) 83%);
       border: none; border-radius: 12px;
       color: #05050A; font-family: 'Inter Tight', inherit; font-size: 14px; font-weight: 500;
       letter-spacing: 0.02em; cursor: pointer; white-space: nowrap;
@@ -159,20 +159,17 @@
       -webkit-mask-composite: xor; mask-composite: exclude;
       pointer-events: none; transition: background 0.15s;
     }
-    /* shine sweep */
+    /* shine sweep — parked left, transitions right on hover, returns on mouse-out */
     #submit-btn::after {
       content: '';
       position: absolute; top: 0; left: 0;
       width: 55%; height: 100%;
-      background: linear-gradient(105deg, transparent 20%, rgba(255,255,255,0.52) 50%, transparent 80%);
-      transform: translateX(-160%);
+      background: linear-gradient(105deg, transparent 20%, rgba(255,255,255,0.50) 50%, transparent 80%);
+      transform: translateX(-200%);
+      transition: transform 0.55s ease-in-out;
       pointer-events: none;
     }
-    @keyframes btn-shine {
-      from { transform: translateX(-160%); }
-      to   { transform: translateX(290%); }
-    }
-    #submit-btn:hover:not(:disabled)::after { animation: btn-shine 0.52s ease-in-out forwards; }
+    #submit-btn:hover:not(:disabled)::after { transform: translateX(290%); }
     /* brighter border on press */
     #submit-btn:active:not(:disabled)::before {
       background: linear-gradient(143deg, rgba(255,255,255,1) 0%, rgba(255,230,170,1) 100%);
