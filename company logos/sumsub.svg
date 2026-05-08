@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 100" width="300" height="100">
+  <circle cx="50" cy="50" r="35" fill="#13C4A3"/>
+  <path d="M35 50 L48 63 L68 38" fill="none" stroke="white" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="95" y="60" font-family="Arial, sans-serif" font-size="36" font-weight="bold" fill="#13C4A3">Sumsub</text>
+</svg>

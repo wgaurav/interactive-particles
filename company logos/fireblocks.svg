@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="256" height="256">
+  <rect width="200" height="200" rx="24" fill="#1A1A2E"/>
+  <path d="M60 40 L100 30 L140 40 L155 100 L100 170 L45 100 Z" fill="none" stroke="#6C63FF" stroke-width="8"/>
+  <path d="M75 75 L100 65 L125 75 L125 110 L100 125 L75 110 Z" fill="#6C63FF"/>
+  <text x="100" y="190" text-anchor="middle" font-family="Arial" font-size="14" font-weight="bold" fill="#6C63FF">FIREBLOCKS</text>
+</svg>
