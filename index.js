@@ -1786,13 +1786,7 @@ function animate() {
     formEl.style.pointerEvents = fAlpha > 0.05 ? 'auto' : 'none';
   }
 
-  // Partner logo rings — success state only (not scroll-driven)
-  if (successActive) {
-    successRingT = Math.min(successRingT + dt * 0.35, 0.82);
-    drawRings(t, successRingT, true);
-  } else {
-    overlayCtx.clearRect(0, 0, window.innerWidth, window.innerHeight);
-  }
+  overlayCtx.clearRect(0, 0, window.innerWidth, window.innerHeight);
 
   composer.render();
 }
@@ -1838,6 +1832,7 @@ document.getElementById('waitlist-form')?.addEventListener('submit', (e) => {
     setTimeout(() => {
       succEl.style.opacity       = '1';
       succEl.style.pointerEvents = 'auto';
+      document.getElementById('logo-ticker').classList.add('visible');
     }, 400);
   }, 1000);
 });
@@ -1849,6 +1844,7 @@ document.getElementById('back-home-btn')?.addEventListener('click', () => {
   succEl.style.pointerEvents = 'none';
   successActive = false;
   successRingT  = 0;
+  document.getElementById('logo-ticker').classList.remove('visible');
   // Re-enable scroll and return to top
   document.body.style.overflow = '';
   window.scrollTo({ top: 0, behavior: 'smooth' });
