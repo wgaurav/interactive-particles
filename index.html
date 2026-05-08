@@ -174,7 +174,9 @@
     #submit-btn:active:not(:disabled)::before {
       background: linear-gradient(143deg, rgba(255,255,255,1) 0%, rgba(255,230,170,1) 100%);
     }
-    #submit-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    #submit-btn:disabled { cursor: not-allowed; }
+    #submit-btn:disabled::before { background: #FBF9F6; }
+    #submit-btn:disabled::after { display: none; }
     .form-disclaimer {
       max-width: min(480px, 90vw); text-align: center;
       font-size: 13px; font-weight: 300; color: rgba(255,255,255,0.32);

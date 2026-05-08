@@ -1823,7 +1823,7 @@ document.getElementById('waitlist-form')?.addEventListener('submit', (e) => {
   const succEl = document.getElementById('success-overlay');
 
   btn.style.width = btn.offsetWidth + 'px';
-  btn.textContent = 'Joining…';
+  btn.textContent = 'Joining';
   btn.disabled = true;
 
   // TODO: replace setTimeout with a real API call (fetch/POST to your backend)
