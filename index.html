@@ -295,6 +295,15 @@
       object-fit: contain;
       filter: none;
     }
+    .ticker-card img[src*="deloitte"],
+    .ticker-card img[src*="image (1)"],
+    .ticker-card img[src*="image (4)"],
+    .ticker-card img[src*="image (5)"] {
+      filter: brightness(0) invert(1);
+    }
+    .ticker-card img[src$="image.png"] {
+      height: 68px;
+    }
 
     @media (max-width: 600px) {
       .form-row { flex-direction: column; gap: 12px; }
