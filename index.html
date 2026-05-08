@@ -272,13 +272,15 @@
     .ticker-track {
       display: flex; width: max-content;
       animation: logoTicker 34s linear infinite;
+      will-change: transform;
+      backface-visibility: hidden;
     }
     .ticker-set {
       display: flex; gap: 20px; padding-right: 20px;
     }
     @keyframes logoTicker {
-      from { transform: translateX(0); }
-      to   { transform: translateX(-50%); }
+      from { transform: translate3d(0, 0, 0); }
+      to   { transform: translate3d(-50%, 0, 0); }
     }
     .ticker-card {
       width: 140px; height: 140px; flex-shrink: 0;
