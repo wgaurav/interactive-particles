@@ -90,13 +90,21 @@
       -webkit-background-clip: text; -webkit-text-fill-color: transparent;
       background-clip: text;
     }
+    @keyframes goldTextShine {
+      0%, 8%  { background-position: 100% 50%; }
+      92%, 100% { background-position: 0% 50%; }
+    }
     #text-overlay .gold {
       display: inline-block;
       font-family: 'PT Serif', Georgia, serif;
       letter-spacing: -0.02em;
-      background: linear-gradient(135deg, #F5C34B 0%, #FDF0D2 50%, #F5C34B 100%);
+      background: linear-gradient(90deg,
+        #E8A214 0%, #F5C34B 22%, #FDF0D2 38%, rgba(255,255,255,0.95) 50%, #FDF0D2 62%, #F5C34B 78%, #E8A214 100%
+      );
+      background-size: 200% 100%;
       -webkit-background-clip: text; -webkit-text-fill-color: transparent;
       background-clip: text;
+      animation: goldTextShine 4s ease-in-out infinite;
     }
 
     /* Waitlist form */
@@ -209,11 +217,16 @@
       font-weight: 400; font-style: normal;
       letter-spacing: -0.02em; line-height: 110%;
       margin: 0; padding-bottom: 0.12em;
-      background:
-        linear-gradient(135deg, rgba(251,246,238,0) 0%, rgba(251,246,238,1) 49%, rgba(251,246,238,0) 100%),
-        linear-gradient(147deg, rgba(255,215,153,1) 0%, rgba(255,183,69,1) 0%, rgba(255,196,100,1) 17%, rgba(227,144,14,1) 83%);
+      background: linear-gradient(90deg,
+        rgba(227,144,14,1) 0%, rgba(255,196,100,1) 18%, rgba(255,215,153,1) 32%,
+        rgba(251,246,238,1) 42%, rgba(255,255,255,1) 50%, rgba(251,246,238,1) 58%,
+        rgba(255,215,153,1) 68%, rgba(255,196,100,1) 82%, rgba(227,144,14,1) 100%
+      );
+      background-size: 200% 100%;
       -webkit-background-clip: text; -webkit-text-fill-color: transparent;
       background-clip: text;
+      animation: goldTextShine 4.5s ease-in-out infinite;
+      animation-delay: 0.8s;
     }
     #success-overlay .success-sub {
       font-family: 'Inter Tight', sans-serif;
